@@ -1,2 +1,3 @@
-READ ME TEST
-Justin's Commit Test
+README
+
+Run "npm i express", "npm i pg" after clone
