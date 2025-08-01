@@ -1,7 +1,1 @@
-README
-
-Run
-"npm i express"
-"npm i pg"
-"npm i bcrypt"
-after clone
+To run application: run 'npm install', then run 'npm start' at the SDIYBT directory
