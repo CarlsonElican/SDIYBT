@@ -1,2 +1,1 @@
-READ ME TEST
-Justin's Commit Test
+To run application: run 'npm install', then run 'npm start' at the SDIYBT directory
