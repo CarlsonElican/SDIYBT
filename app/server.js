@@ -6,6 +6,7 @@ const session = require("express-session");
 const app = express();
 const port = 3000;
 const hostname = "localhost";
+const randomize = require("./randomize.js");
 
 
 const pool = new pg.Pool({
@@ -22,6 +23,9 @@ app.use(session({
 
 app.use(express.static("public")); 
 app.use(express.json()); 
+// add any protected links through
+app.use('/protected', express.static(__dirname + '/protected'));
+
 
 
 app.post("/signup", async (req, res) => {
@@ -99,6 +103,59 @@ app.get("/main", (req, res) => {
   }
   res.sendFile(__dirname + "/protected/main.html");
 });
+
+app.post("/generate-pet", async (req, res) => {
+    if (!req.session.username) {
+        return res.status(401).json({ error: "Not logged in" });
+    }
+
+    let rarity = randomize.getRarity();
+    let mutation = randomize.getMutation();
+    let health = randomize.getHealth();
+    let health_growth = randomize.getHealthGrowth();
+    let attack = randomize.getAttack();
+    let attack_growth = randomize.getAttackGrowth();
+    let defense = randomize.getDefense();
+    let defense_growth = randomize.getDefenseGrowth();
+    let speed = randomize.getSpeed();
+    let type = randomize.getType();
+
+
+    const pet = {
+        username: req.session.username,
+        name: "Test",
+        rarity: rarity,
+        sprite: "images/fluffy.png",
+        level: 1,
+        mutations: mutation ? [mutation] : [],
+        health: health,
+        health_growth: health_growth,
+        attack: attack,
+        attack_growth: attack_growth,
+        defense: defense,
+        defense_growth: defense_growth,
+        speed: speed,
+        type: type,
+        
+        move1name: "Bite",
+        move1type: "normal",
+        move1damage: 12,
+        move2name: "Flame Burst",
+        move2type: "fire",
+        move2damage: 18,
+        move3name: "Scratch",
+        move3type: "normal",
+        move3damage: 10,
+        move4name: "Quick Attack",
+        move4type: "normal",
+        move4damage: 14,
+    };
+
+    console.log("Generated pet for user:", pet);
+
+    res.json(pet);
+});
+
 
 app.listen(port, hostname, () => {
   console.log(`Listening at: http://${hostname}:${port}`);
