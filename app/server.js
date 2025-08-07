@@ -105,55 +105,147 @@ app.get("/main", (req, res) => {
 });
 
 app.post("/generate-pet", async (req, res) => {
-    if (!req.session.username) {
-        return res.status(401).json({ error: "Not logged in" });
-    }
+  if (!req.session.username) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
 
-    let rarity = randomize.getRarity();
-    let mutation = randomize.getMutation();
-    let health = randomize.getHealth();
-    let health_growth = randomize.getHealthGrowth();
-    let attack = randomize.getAttack();
-    let attack_growth = randomize.getAttackGrowth();
-    let defense = randomize.getDefense();
-    let defense_growth = randomize.getDefenseGrowth();
-    let speed = randomize.getSpeed();
-    let type = randomize.getType();
+  try {
+    const randomId = Math.floor(Math.random() * 898) + 1;
+    const pokeRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${randomId}`);
+    const pokeData = await pokeRes.json();
+    const sprite = pokeData.sprites.front_default || "images/fluffy.png";
 
+    const rarity = randomize.getRarity();
+    const mutation = randomize.getMutation();
+    const health = randomize.getHealth();
+    const health_growth = randomize.getHealthGrowth();
+    const attack = randomize.getAttack();
+    const attack_growth = randomize.getAttackGrowth();
+    const defense = randomize.getDefense();
+    const defense_growth = randomize.getDefenseGrowth();
+    const speed = randomize.getSpeed();
+    const type = randomize.getType();
 
     const pet = {
-        username: req.session.username,
-        name: "Test",
-        rarity: rarity,
-        sprite: "images/fluffy.png",
-        level: 1,
-        mutations: mutation ? [mutation] : [],
-        health: health,
-        health_growth: health_growth,
-        attack: attack,
-        attack_growth: attack_growth,
-        defense: defense,
-        defense_growth: defense_growth,
-        speed: speed,
-        type: type,
-        
-        move1name: "Bite",
-        move1type: "normal",
-        move1damage: 12,
-        move2name: "Flame Burst",
-        move2type: "fire",
-        move2damage: 18,
-        move3name: "Scratch",
-        move3type: "normal",
-        move3damage: 10,
-        move4name: "Quick Attack",
-        move4type: "normal",
-        move4damage: 14,
+      username: req.session.username,
+      name: "Test",
+      rarity,
+      sprite,
+      level: 1,
+      mutations: mutation ? [mutation] : [],
+      health,
+      health_growth,
+      attack,
+      attack_growth,
+      defense,
+      defense_growth,
+      speed,
+      type,
+
+      move1name: "Bite",
+      move1type: "normal",
+      move1damage: 12,
+      move2name: "Flame Burst",
+      move2type: "fire",
+      move2damage: 18,
+      move3name: "Scratch",
+      move3type: "normal",
+      move3damage: 10,
+      move4name: "Quick Attack",
+      move4type: "normal",
+      move4damage: 14,
     };
 
-    console.log("Generated pet for user:", pet);
+    await pool.query(
+      `INSERT INTO pets (
+        username, name, rarity, sprite, level, mutations,
+        health, health_growth, attack, attack_growth,
+        defense, defense_growth, speed, type,
+        move1name, move1type, move1damage,
+        move2name, move2type, move2damage,
+        move3name, move3type, move3damage,
+        move4name, move4type, move4damage
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10,
+        $11, $12, $13, $14,
+        $15, $16, $17,
+        $18, $19, $20,
+        $21, $22, $23,
+        $24, $25, $26
+      )
+      ON CONFLICT (username) DO UPDATE SET
+        name = EXCLUDED.name,
+        rarity = EXCLUDED.rarity,
+        sprite = EXCLUDED.sprite,
+        level = EXCLUDED.level,
+        mutations = EXCLUDED.mutations,
+        health = EXCLUDED.health,
+        health_growth = EXCLUDED.health_growth,
+        attack = EXCLUDED.attack,
+        attack_growth = EXCLUDED.attack_growth,
+        defense = EXCLUDED.defense,
+        defense_growth = EXCLUDED.defense_growth,
+        speed = EXCLUDED.speed,
+        type = EXCLUDED.type,
+        move1name = EXCLUDED.move1name,
+        move1type = EXCLUDED.move1type,
+        move1damage = EXCLUDED.move1damage,
+        move2name = EXCLUDED.move2name,
+        move2type = EXCLUDED.move2type,
+        move2damage = EXCLUDED.move2damage,
+        move3name = EXCLUDED.move3name,
+        move3type = EXCLUDED.move3type,
+        move3damage = EXCLUDED.move3damage,
+        move4name = EXCLUDED.move4name,
+        move4type = EXCLUDED.move4type,
+        move4damage = EXCLUDED.move4damage,
+        date_received = NOW()
+    `,
+      [
+        pet.username, pet.name, pet.rarity, pet.sprite, pet.level, pet.mutations,
+        pet.health, pet.health_growth, pet.attack, pet.attack_growth,
+        pet.defense, pet.defense_growth, pet.speed, pet.type,
+        pet.move1name, pet.move1type, pet.move1damage,
+        pet.move2name, pet.move2type, pet.move2damage,
+        pet.move3name, pet.move3type, pet.move3damage,
+        pet.move4name, pet.move4type, pet.move4damage
+      ]
+    );
 
+    console.log("Saved pet for user:", pet.username);
     res.json(pet);
+  } catch (err) {
+    console.error("Error generating or saving pet:", err);
+    res.status(500).json({ error: "Failed to generate and save pet" });
+  }
+});
+
+app.get("/my-pet", async (req, res) => {
+  console.log("Getting pet for:", req.session.username);
+
+  if (!req.session.username) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
+
+  try {
+    const result = await pool.query(
+      "SELECT * FROM pets WHERE username = $1",
+      [req.session.username]
+    );
+
+    if (result.rows.length === 0) {
+      console.log("No pet found for:", req.session.username);
+      return res.status(404).json({ error: "No pet found" });
+    }
+
+    console.log("Pet retrieved for:", req.session.username);
+    res.json(result.rows[0]);
+
+  } catch (err) {
+    console.error("Error fetching pet:", err);
+    res.status(500).json({ error: "Failed to retrieve pet" });
+  }
 });
 
 
