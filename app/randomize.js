@@ -3,9 +3,9 @@ function getRarity() {
     if (random < 0.50) return "Common";
     if (random < 0.80) return "Uncommon";
     if (random < 0.90) return "Rare";
-    if (random < 0.95) return "Epic";
+    if (random < 0.975) return "Epic";
     if (random < 0.995) return "Mythical";
-    if (random < 0.9999) return "Divine";
+    if (random < 0.9999) return "Divine"; 
     return "The One and Only"; 
 }
 
@@ -50,7 +50,7 @@ function getDefenseGrowth() {
 }
 
 function getSpeed() {
-    const options = ["slow", "medium", "fast"];
+    const options = ["Slow", "Medium", "Fast"];
     return options[Math.floor(Math.random() * options.length)];
 }
 
