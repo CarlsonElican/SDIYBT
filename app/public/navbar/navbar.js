@@ -1,11 +1,11 @@
 fetch('/navbar/navbar.html')
     .then(response => response.text())
     .then(data => {
-        document.getElementById('navbar-placeholder').innerHTML = data;
+        document.getElementById('navbar-id').innerHTML = data;
 
-        let button = document.getElementById("signout");
-        if (button) {
-            button.addEventListener("click", function() {
+        let signoutBtn = document.getElementById("signout");
+        if (signoutBtn) {
+            signoutBtn.addEventListener("click", function() {
                 fetch("/logout", {
                     method: "POST",
                     credentials: "include"
@@ -15,6 +15,13 @@ fetch('/navbar/navbar.html')
                         window.location.href = "/";
                     }
                 });
+            });
+        }
+
+        let profileBtn = document.getElementById("profile");
+        if (profileBtn) {
+            profileBtn.addEventListener("click", function() {
+                window.location.href = "/profile";
             });
         }
 

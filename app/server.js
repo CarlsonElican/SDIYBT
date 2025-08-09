@@ -104,57 +104,125 @@ app.get("/main", (req, res) => {
   res.sendFile(__dirname + "/protected/main.html");
 });
 
+app.get("/profile", (req, res) => {
+    if (!req.session.username) {
+        return res.redirect("/login.html");
+    }
+    res.sendFile(__dirname + "/protected/profile.html");
+});
+
+async function randomizePet(sessionUser) {
+  const randomId = Math.floor(Math.random() * 898) + 1;
+  const pokeRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${randomId}`);
+  if (!pokeRes.ok) throw new Error("PokeAPI request failed");
+  const pokeData = await pokeRes.json();
+  const sprite = pokeData.sprites.front_default;
+
+  const rarity = randomize.getRarity();
+  const mutation = randomize.getMutation();
+  const health = randomize.getHealth();
+  const health_growth = randomize.getHealthGrowth();
+  const attack = randomize.getAttack();
+  const attack_growth = randomize.getAttackGrowth();
+  const defense = randomize.getDefense();
+  const defense_growth = randomize.getDefenseGrowth();
+  const speed = randomize.getSpeed();
+  const type = randomize.getType();
+
+  const pet = {
+    username: sessionUser || null, 
+    name: "Test",
+    rarity,
+    sprite,
+    level: 1,
+    mutations: mutation ? [mutation] : [],
+    health,
+    health_growth,
+    attack,
+    attack_growth,
+    defense,
+    defense_growth,
+    speed,
+    type,
+    move1name: "Bite",
+    move1type: "normal",
+    move1damage: 12,
+    move2name: "Flame Burst",
+    move2type: "fire",
+    move2damage: 18,
+    move3name: "Scratch",
+    move3type: "normal",
+    move3damage: 10,
+    move4name: "Quick Attack",
+    move4type: "normal",
+    move4damage: 14,
+  };
+
+  return pet;
+}
+
+const SAVABLE_FIELDS = new Set([
+  "name",
+  "rarity",
+  "sprite",
+  "level",
+  "mutations",
+  "health",
+  "health_growth",
+  "attack",
+  "attack_growth",
+  "defense",
+  "defense_growth",
+  "speed",
+  "type",
+  "move1name",
+  "move1type",
+  "move1damage",
+  "move2name",
+  "move2type",
+  "move2damage",
+  "move3name",
+  "move3type",
+  "move3damage",
+  "move4name",
+  "move4type",
+  "move4damage",
+]);
+
+function sanitizePetForSave(body) {
+  const pet = {};
+  for (const key of Object.keys(body || {})) {
+    if (SAVABLE_FIELDS.has(key)) pet[key] = body[key];
+  }
+  pet.name = typeof pet.name === "string" && pet.name.trim() ? pet.name.trim() : "Test";
+  pet.level = Number.isInteger(pet.level) && pet.level > 0 ? pet.level : 1;
+  if (!Array.isArray(pet.mutations)) pet.mutations = [];
+  return pet;
+}
+
 app.post("/generate-pet", async (req, res) => {
   if (!req.session.username) {
     return res.status(401).json({ error: "Not logged in" });
   }
 
+
   try {
-    const randomId = Math.floor(Math.random() * 898) + 1;
-    const pokeRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${randomId}`);
-    const pokeData = await pokeRes.json();
-    const sprite = pokeData.sprites.front_default || "images/fluffy.png";
+    const pet = await randomizePet(null); 
+    res.json(pet);
+  } catch (err) {
+    console.error("Error generating pet:", err);
+    res.status(500).json({ error: "Failed to generate pet" });
+  }
+});
 
-    const rarity = randomize.getRarity();
-    const mutation = randomize.getMutation();
-    const health = randomize.getHealth();
-    const health_growth = randomize.getHealthGrowth();
-    const attack = randomize.getAttack();
-    const attack_growth = randomize.getAttackGrowth();
-    const defense = randomize.getDefense();
-    const defense_growth = randomize.getDefenseGrowth();
-    const speed = randomize.getSpeed();
-    const type = randomize.getType();
+app.post("/save-pet", async (req, res) => {
+  if (!req.session.username) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
 
-    const pet = {
-      username: req.session.username,
-      name: "Test",
-      rarity,
-      sprite,
-      level: 1,
-      mutations: mutation ? [mutation] : [],
-      health,
-      health_growth,
-      attack,
-      attack_growth,
-      defense,
-      defense_growth,
-      speed,
-      type,
-
-      move1name: "Bite",
-      move1type: "normal",
-      move1damage: 12,
-      move2name: "Flame Burst",
-      move2type: "fire",
-      move2damage: 18,
-      move3name: "Scratch",
-      move3type: "normal",
-      move3damage: 10,
-      move4name: "Quick Attack",
-      move4type: "normal",
-      move4damage: 14,
-    };
+  try {
+    const pet = sanitizePetForSave(req.body || {});
+    const username = req.session.username;
 
     await pool.query(
       `INSERT INTO pets (
@@ -203,21 +271,40 @@ app.post("/generate-pet", async (req, res) => {
         date_received = NOW()
     `,
       [
-        pet.username, pet.name, pet.rarity, pet.sprite, pet.level, pet.mutations,
-        pet.health, pet.health_growth, pet.attack, pet.attack_growth,
-        pet.defense, pet.defense_growth, pet.speed, pet.type,
-        pet.move1name, pet.move1type, pet.move1damage,
-        pet.move2name, pet.move2type, pet.move2damage,
-        pet.move3name, pet.move3type, pet.move3damage,
-        pet.move4name, pet.move4type, pet.move4damage
+        username,
+        pet.name,
+        pet.rarity,
+        pet.sprite,
+        pet.level,
+        pet.mutations,
+        pet.health,
+        pet.health_growth,
+        pet.attack,
+        pet.attack_growth,
+        pet.defense,
+        pet.defense_growth,
+        pet.speed,
+        pet.type,
+        pet.move1name,
+        pet.move1type,
+        pet.move1damage,
+        pet.move2name,
+        pet.move2type,
+        pet.move2damage,
+        pet.move3name,
+        pet.move3type,
+        pet.move3damage,
+        pet.move4name,
+        pet.move4type,
+        pet.move4damage,
       ]
     );
 
-    console.log("Saved pet for user:", pet.username);
-    res.json(pet);
+    console.log("Saved pet for user:", username);
+    res.json({ ok: true });
   } catch (err) {
-    console.error("Error generating or saving pet:", err);
-    res.status(500).json({ error: "Failed to generate and save pet" });
+    console.error("Error saving pet:", err);
+    res.status(500).json({ error: "Failed to save pet" });
   }
 });
 
