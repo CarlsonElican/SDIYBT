@@ -5,7 +5,7 @@ function getRarity() {
     if (random < 0.90) return "Rare";
     if (random < 0.975) return "Epic";
     if (random < 0.995) return "Mythical";
-    if (random < 0.9999) return "Divine"; 
+    if (random < 0.9999) return "Divine";
     return "The One and Only"; 
 }
 

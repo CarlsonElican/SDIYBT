@@ -1,3 +1,27 @@
+function joinOrNone(arr) {
+  if (Array.isArray(arr) && arr.length > 0) return arr.join(", ");
+  return "None";
+}
+
+function inferMoveRarity(name, dmg) {
+  var ln = typeof name === "string" ? name.toLowerCase() : "";
+  var legendHints = [
+    "hyper beam","explosion","roar of time","hydro cannon","v-create","eternabeam",
+    "menacing moonraze","light that burns the sky","let's snuggle forever","pulverizing pancake",
+    "self-destruct","catastropika","stoked sparksurfer","oceanic operetta","g-max fireball",
+    "g-max hydrosnipe","clangorous soulblaze","searing sunraze smash","malicious moonsault",
+    "soul-stealing 7-star strike","sinister arrow raid","splintered stormshards"
+  ];
+  for (var i = 0; i < legendHints.length; i++) {
+    if (ln.indexOf(legendHints[i]) >= 0) return "legendary";
+  }
+  if (typeof dmg !== "number") return "weak";
+  if (dmg >= 1 && dmg <= 49) return "weak";
+  if (dmg >= 50 && dmg <= 80) return "average";
+  if (dmg >= 81 && dmg <= 100) return "based";
+  return "awesome";
+}
+
 function displayPet(data) {
   const container = document.getElementById("pet-container");
   container.innerHTML = '';
@@ -27,27 +51,43 @@ function displayPet(data) {
     ["Rarity", data.rarity],
     ["Type", data.type],
     ["Speed", data.speed],
-    ["Mutations", data.mutations?.length > 0 ? data.mutations.join(", ") : "None"],
+    ["Mutations", joinOrNone(data.mutations)],
     ["Level", data.level],
-    ["Health", `${data.health} (+${data.health_growth}/level)`],
-    ["Attack", `${data.attack} (+${data.attack_growth}/level)`],
-    ["Defense", `${data.defense} (+${data.defense_growth}/level)`],
+    ["Health", String(data.health) + " (+" + data.health_growth + "/level)"],
+    ["Attack", String(data.attack) + " (+" + data.attack_growth + "/level)"],
+    ["Defense", String(data.defense) + " (+" + data.defense_growth + "/level)"]
   ];
 
-  lines.forEach(([label, value]) => {
-    const p = document.createElement("p");
-    p.innerHTML = `<strong>${label}:</strong> ${value}`;
+  for (var i = 0; i < lines.length; i++) {
+    var p = document.createElement("p");
+    p.innerHTML = "<strong>" + lines[i][0] + ":</strong> " + lines[i][1];
     petBox.appendChild(p);
-  });
+  }
 
-  const moveHeader = document.createElement("p");
+  var moveHeader = document.createElement("p");
   moveHeader.innerHTML = "<strong>Moves:</strong>";
   petBox.appendChild(moveHeader);
 
   const moveList = document.createElement("ul");
-  for (let i = 1; i <= 4; i++) {
-    const li = document.createElement("li");
-    li.textContent = `${data[`move${i}name`]} (${data[`move${i}type`]}) - ${data[`move${i}damage`]} dmg`;
+  moveList.style.paddingLeft = "18px";
+
+  for (var s = 1; s <= 4; s++) {
+    var name = data["move" + s + "name"];
+    if (!name) continue;
+    var type = data["move" + s + "type"];
+    var dmg = data["move" + s + "damage"];
+    var rar = data["move" + s + "rarity"];
+    if (!rar) rar = inferMoveRarity(name, dmg);
+
+    var li = document.createElement("li");
+    li.classList.add("move-chip");
+    if (rar === "weak") li.classList.add("rarity-weak");
+    else if (rar === "average") li.classList.add("rarity-average");
+    else if (rar === "based") li.classList.add("rarity-based");
+    else if (rar === "awesome") li.classList.add("rarity-awesome");
+    else if (rar === "legendary") li.classList.add("rarity-legendary");
+
+    li.textContent = name + " (" + type + ") - " + dmg + " dmg";
     moveList.appendChild(li);
   }
 
