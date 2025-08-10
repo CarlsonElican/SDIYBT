@@ -1,37 +1,38 @@
-document.addEventListener("DOMContentLoaded", function() {
-    fetch('navbar/navbar.html')
-        .then(response => response.text())
-        .then(data => {
-            document.getElementById('navbar-placeholder').innerHTML = data;
+fetch('/navbar/navbar.html')
+    .then(response => response.text())
+    .then(data => {
+        document.getElementById('navbar-id').innerHTML = data;
 
-            fetch("/me", { credentials: "include" })
+        let signoutBtn = document.getElementById("signout");
+        if (signoutBtn) {
+            signoutBtn.addEventListener("click", function() {
+                fetch("/logout", {
+                    method: "POST",
+                    credentials: "include"
+                })
                 .then(res => {
                     if (res.status === 200) {
-                        return res.json();
-                    }
-                })
-                .then(data => {
-                    if (data && data.username) {
-                        const greeting = document.getElementById("navbar-greeting");
-                        if (greeting) {
-                            greeting.textContent = "Hi, " + data.username;
-                        }
+                        window.location.href = "/";
                     }
                 });
+            });
+        }
 
-            const btn = document.getElementById("signout");
-            if(btn) {
-                btn.addEventListener("click", function() {
-                    fetch("/logout", {
-                        method: "POST",
-                        credentials: "include"
-                    })
-                    .then(res => {
-                        if (res.status === 200) {
-                            window.location.href = "/";
-                        }
-                    });
-                });
-            }
-        });
-});
+        let profileBtn = document.getElementById("profile");
+        if (profileBtn) {
+            profileBtn.addEventListener("click", function() {
+                window.location.href = "/profile";
+            });
+        }
+
+        fetch("/me", { credentials: "include" })
+            .then(res => res.status === 200 ? res.json() : null)
+            .then(data => {
+                if (data && data.username) {
+                    const greeting = document.getElementById("navbar-greeting");
+                    if (greeting) {
+                        greeting.textContent = "Hi, " + data.username;
+                    }
+                }
+            });
+    });
