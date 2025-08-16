@@ -2,7 +2,6 @@ let currentPet = null;
 
 var generateBtn = document.getElementById("generate");
 var saveBtn = document.getElementById("savepet");
-var levelBtn = document.getElementById("level20");
 
 var messageDiv = document.createElement("div");
 messageDiv.style.textAlign = "center";
@@ -228,25 +227,3 @@ modalCancelBtn.addEventListener("click", function () {
   modalOverlay.style.display = "none";
 });
 
-if (levelBtn) {
-  levelBtn.addEventListener("click", function () {
-    fetch("/test/levelup20", {
-      method: "POST",
-      credentials: "include"
-    })
-      .then(function (res) {
-        if (res.status === 404) {
-          alert("No saved pet. Generate and Save first.");
-          return null;
-        }
-        if (!res.ok) throw new Error("Failed to level up");
-        return res.json();
-      })
-      .then(function (row) {
-        if (row) displayPet(row);
-      })
-      .catch(function (err) {
-        console.error("Level up failed:", err);
-      });
-  });
-}
