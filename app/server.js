@@ -131,6 +131,57 @@ function bucketForPower(power) {
   return null;
 }
 
+const moveCache = new Map();
+const bucketPools = {
+  weak: [], average: [], based: [], awesome: [], legendary: []
+};
+
+function bucketFromPower(p) {
+  if (p > 135) return "legendary";
+  if (p >= 101) return "awesome";
+  if (p >= 81)  return "based";
+  if (p >= 50)  return "average";
+  if (p >= 1)   return "weak";
+  return null;
+}
+
+function pushIntoBucketPools(moveJson) {
+  const p = typeof moveJson.power === "number" ? moveJson.power : 0;
+  const b = bucketFromPower(p);
+  if (!b) return;
+  const apiName = (moveJson.name || "").toLowerCase();         
+  const displayName = apiName.replace(/-/g, " ");              
+  const typeField = moveJson.type?.name || "normal";
+  bucketPools[b].push({ name: displayName, type: typeField, power: p, rarity: b });
+}
+
+async function fetchMoveById(id) {
+  if (moveCache.has(id)) return moveCache.get(id);
+  const res = await fetch(`https://pokeapi.co/api/v2/move/${id}`);
+  if (!res.ok) throw new Error("Move fetch failed");
+  const json = await res.json();
+  moveCache.set(id, json);
+
+  const power = typeof json.power === "number" ? json.power : 0;
+  if (power > 0) pushIntoBucketPools(json);
+  return json;
+}
+
+function pickLocalFromBucket(bucket, excludeLower) {
+  const pool = bucketPools[bucket];
+  if (!pool || pool.length === 0) return null;
+
+  for (let tries = 0; tries < 12; tries++) {
+    const m = pool[Math.floor(Math.random() * pool.length)];
+    if (!excludeLower.has(m.name.toLowerCase())) return m;
+  }
+
+  for (const m of pool) {
+    if (!excludeLower.has(m.name.toLowerCase())) return m;
+  }
+  return null;
+}
+
 function rollBucket(weights) {
   const r = Math.random() * 100;
   let sum = 0;
@@ -145,35 +196,27 @@ function rollBucket(weights) {
 
 
 async function pickDamagingMoveFromBucket(bucket, excludeLower, tries) {
+  const local = pickLocalFromBucket(bucket, excludeLower);
+  if (local) return local;
+
+  const MAX_NETWORK_SEED = Math.min(tries, 10);
   let t = 0;
-  while (t < tries) {
+
+  while (t < MAX_NETWORK_SEED) {
     const id = Math.floor(Math.random() * 920) + 1;
-    const res = await fetch(`https://pokeapi.co/api/v2/move/${id}`);
-    if (res.ok) {
-      const m = await res.json();
+    try {
+      const m = await fetchMoveById(id);
       const power = typeof m.power === "number" ? m.power : 0;
       if (power > 0) {
-        let ok = false;
-        if (bucket === "legendary") ok = inLegendary(power);
-        if (bucket === "awesome")   ok = inAwesome(power);
-        if (bucket === "based")     ok = inBased(power);
-        if (bucket === "average")   ok = inAverage(power);
-        if (bucket === "weak")      ok = inWeak(power);
-
-        if (ok) {
-          const apiName = (m.name || "").toLowerCase();  
-          const displayName = apiName.replace(/-/g, " ");  
-          const lower = displayName;                       
-          if (!excludeLower.has(lower)) {
-            const typeField = (m.type && m.type.name) ? m.type.name : "normal";
-            const rarity = bucketForPower(power) || "awesome"; 
-            return { name: displayName, type: typeField, power, rarity };
-          }
-        }
+        const candidate = pickLocalFromBucket(bucket, excludeLower);
+        if (candidate) return candidate;
       }
+    } catch (_) {
+
     }
     t += 1;
   }
+
   return null;
 }
 
@@ -409,7 +452,8 @@ app.post("/save-pet", async (req, res) => {
         move1name, move1type, move1damage, move1rarity,
         move2name, move2type, move2damage, move2rarity,
         move3name, move3type, move3damage, move3rarity,
-        move4name, move4type, move4damage, move4rarity
+        move4name, move4type, move4damage, move4rarity,
+        rerolls_spent
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
@@ -417,7 +461,8 @@ app.post("/save-pet", async (req, res) => {
         $15, $16, $17, $18,
         $19, $20, $21, $22,
         $23, $24, $25, $26,
-        $27, $28, $29, $30
+        $27, $28, $29, $30,
+        0
       )
       ON CONFLICT (username) DO UPDATE SET
         name = EXCLUDED.name,
@@ -449,6 +494,7 @@ app.post("/save-pet", async (req, res) => {
         move4type = EXCLUDED.move4type,
         move4damage = EXCLUDED.move4damage,
         move4rarity = EXCLUDED.move4rarity,
+        rerolls_spent = 0,
         date_received = NOW()
       `,
       [
@@ -514,6 +560,8 @@ app.get("/my-pet", async (req, res) => {
     const petRow = result.rows[0];
     const available_rerolls = getAvailableRerolls(petRow.level, petRow.rerolls_spent);
 
+    console.log("LVL:", petRow.level, "spent:", petRow.rerolls_spent, "avail:", available_rerolls);
+
     console.log("Pet retrieved for:", req.session.username);
     res.json({ ...petRow, available_rerolls });
 
@@ -536,7 +584,9 @@ function indexToRarity(i) {
 
 function getAvailableRerolls(level, spent) {
   const milestones = Math.max(0, Math.floor((level - 61) / 20));
-  return Math.max(0, milestones - (spent || 0));
+  const s = Number.isFinite(spent) ? spent : 0;
+  const used = Math.min(s, milestones);
+  return Math.max(0, milestones - used);
 }
 
 const REROLL_ODDS = {
@@ -607,7 +657,7 @@ app.post("/reroll-move", async (req, res) => {
     const updateSql = `
       UPDATE pets
       SET ${nameKey}=$2, ${typeKey}=$3, ${dmgKey}=$4, ${rarKey}=$5,
-          rerolls_spent = rerolls_spent + 1
+          rerolls_spent = COALESCE(rerolls_spent, 0) + 1
       WHERE username=$1
       RETURNING *`;
     const upd = await pool.query(updateSql, [
