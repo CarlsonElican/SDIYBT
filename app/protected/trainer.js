@@ -44,6 +44,7 @@ function displayPet(data) {
     ["Speed", data.speed],
     ["Mutations", joinOrNone(data.mutations)],
     ["Level", data.level],
+    ["XP", `${data.xp ?? 0} / ${data.xp_cap ?? 10}`],
     ["Health", String(data.health) + " (+" + data.health_growth + "/level)"],
     ["Attack", String(data.attack) + " (+" + data.attack_growth + "/level)"],
     ["Defense", String(data.defense) + " (+" + data.defense_growth + "/level)"]
@@ -145,8 +146,8 @@ function loadPet() {
     });
 }
 
-document.getElementById("level20")?.addEventListener("click", function() {
-  fetch("/test/levelup20", { method: "POST", credentials: "include" })
+document.getElementById("levelup")?.addEventListener("click", function() {
+  fetch("/levelup", { method: "POST", credentials: "include" })
     .then(function (res) {
       if (res.status === 404) {
         alert("No saved pet. Generate and Save first.");
@@ -160,6 +161,24 @@ document.getElementById("level20")?.addEventListener("click", function() {
     })
     .catch(function (err) {
       console.error("Level up failed:", err);
+    });
+});
+
+document.getElementById("xpgain")?.addEventListener("click", function() {
+  fetch("/gain-xp", { method: "POST", credentials: "include" })
+    .then(res => {
+      if (res.status === 404) {
+        alert("No saved pet. Generate and Save first.");
+        return null;
+      }
+      if (!res.ok) throw new Error("Failed to gain XP");
+      return res.json();
+    })
+    .then(function (row) {
+      if (row) displayPet(row);
+    })
+    .catch(function (err) {
+      console.error("XP gain failed:", err);
     });
 });
 

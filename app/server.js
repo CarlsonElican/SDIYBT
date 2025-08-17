@@ -12,6 +12,9 @@ const pool = new pg.Pool({
   connectionString: "postgresql://neondb_owner:npg_mpqW7HL6crvz@ep-cold-base-aep1ue78-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 });
 
+const GENERATE_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
+
+
 app.use(session({
   secret: "sdiybt-secret-code-word",
   resave: false,
@@ -104,6 +107,83 @@ app.get("/trainer", (req, res) => {
   res.sendFile(__dirname + "/protected/trainer.html");
 });
 
+async function performLevelUp(username) {
+  const up = await pool.query(
+    `
+    UPDATE pets
+    SET
+      level   = LEAST(COALESCE(level, 1) + 1, 100),
+      health  = COALESCE(health, 0)  + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(health_growth, 0)  ELSE 0 END,
+      attack  = COALESCE(attack, 0)  + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(attack_growth, 0)  ELSE 0 END,
+      defense = COALESCE(defense, 0) + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(defense_growth, 0) ELSE 0 END
+    WHERE username = $1
+    RETURNING *`,
+    [username]
+  );
+  if (up.rows.length === 0) throw new Error("No pet found for level up");
+  let pet = up.rows[0];
+  const level = pet.level;
+
+  const filledCount = (p) => {
+    let c = 0;
+    if (p.move1name) c++;
+    if (p.move2name) c++;
+    if (p.move3name) c++;
+    if (p.move4name) c++;
+    return c;
+  };
+
+  if (level >= 20 && level % 20 === 0) {
+    const allowed = Math.min(1 + Math.floor(level / 20), 4);
+    const have = filledCount(pet);
+
+    if (have < allowed) {
+      const moves = await generateMovesForPet(pet.rarity);
+
+      const known = new Set();
+      if (pet.move1name) known.add((pet.move1name || "").toLowerCase());
+      if (pet.move2name) known.add((pet.move2name || "").toLowerCase());
+      if (pet.move3name) known.add((pet.move3name || "").toLowerCase());
+      if (pet.move4name) known.add((pet.move4name || "").toLowerCase());
+
+      let next = null;
+      for (let i = 0; i < moves.length; i++) {
+        const nm = (moves[i].name || "").toLowerCase();
+        if (!known.has(nm)) { next = moves[i]; break; }
+      }
+      if (!next) next = moves[0];
+
+      let setSql = "";
+      if (!pet.move1name) { setSql = "move1name=$2, move1type=$3, move1damage=$4, move1rarity=$5"; }
+      else if (!pet.move2name) { setSql = "move2name=$2, move2type=$3, move2damage=$4, move2rarity=$5"; }
+      else if (!pet.move3name) { setSql = "move3name=$2, move3type=$3, move3damage=$4, move3rarity=$5"; }
+      else if (!pet.move4name) { setSql = "move4name=$2, move4type=$3, move4damage=$4, move4rarity=$5"; }
+
+      if (setSql) {
+        await pool.query(
+          `UPDATE pets SET ${setSql} WHERE username=$1`,
+          [username, next.name, next.type, next.power, next.rarity]
+        );
+      }
+
+      await pool.query(
+        `UPDATE pets SET rerolls_spent = COALESCE(rerolls_spent,0) + 1 WHERE username=$1`,
+        [username]
+      );
+
+      const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [username]);
+      pet = refetch.rows[0];
+    } else {
+      await pool.query(
+        `UPDATE pets SET rerolls_spent = COALESCE(rerolls_spent,0) + 1 WHERE username=$1`,
+        [username]
+      );
+    }
+  }
+
+  const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+  return { ...pet, available_rerolls };
+}
 
 const PET_TO_MOVE_DIST = {
   "Common":           { weak:60,  average:20,  based:15,  awesome:5, legendary:0 },
@@ -296,11 +376,13 @@ async function randomizePet(sessionUser) {
     defense_growth,
     speed,
     type,
-
     move1name: null, move1type: null, move1damage: null, move1rarity: null,
     move2name: null, move2type: null, move2damage: null, move2rarity: null,
     move3name: null, move3type: null, move3damage: null, move3rarity: null,
-    move4name: null, move4type: null, move4damage: null, move4rarity: null
+    move4name: null, move4type: null, move4damage: null, move4rarity: null,
+    xp: 0,
+    xp_cap: 10,
+
   };
 
   for (let i = 0; i < moves.length; i++) {
@@ -344,69 +426,84 @@ const SAVABLE_FIELDS = new Set([
   "move4type",
   "move4damage",
   "move4rarity",
+  "xp",
+  "xp_cap"
 ]);
 
-app.post("/test/levelup20", async (req, res) => {
-  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+app.post("/gain-xp", async (req, res) => {
+  if (!req.session.username) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
 
   try {
-    const up = await pool.query(
-      "UPDATE pets SET level = COALESCE(level, 1) + 20 WHERE username = $1 RETURNING *",
+    const petRes = await pool.query(
+      "SELECT * FROM pets WHERE username = $1",
       [req.session.username]
     );
-    if (up.rows.length === 0) return res.status(404).json({ error: "No pet found" });
-
-    const pet = up.rows[0];
-
-    const allowed = Math.min(1 + Math.floor((pet.level - 1) / 20), 4);
-    const filledCount = (p) => {
-      let c = 0;
-      if (p.move1name) c += 1;
-      if (p.move2name) c += 1;
-      if (p.move3name) c += 1;
-      if (p.move4name) c += 1;
-      return c;
-    };
-
-    let have = filledCount(pet);
-    if (have < allowed) {
-      const moves = await generateMovesForPet(pet.rarity);
-
-      const known = new Set();
-      if (pet.move1name) known.add(pet.move1name.toLowerCase());
-      if (pet.move2name) known.add(pet.move2name.toLowerCase());
-      if (pet.move3name) known.add(pet.move3name.toLowerCase());
-      if (pet.move4name) known.add(pet.move4name.toLowerCase());
-
-      let next = null;
-      for (let i = 0; i < moves.length; i++) {
-        const nm = moves[i].name.toLowerCase();
-        if (!known.has(nm)) { next = moves[i]; break; }
-      }
-      if (!next) next = moves[0];
-
-      let setSql = "";
-      if (!pet.move1name) { setSql = "move1name=$2, move1type=$3, move1damage=$4, move1rarity=$5"; }
-      else if (!pet.move2name) { setSql = "move2name=$2, move2type=$3, move2damage=$4, move2rarity=$5"; }
-      else if (!pet.move3name) { setSql = "move3name=$2, move3type=$3, move3damage=$4, move3rarity=$5"; }
-      else if (!pet.move4name) { setSql = "move4name=$2, move4type=$3, move4damage=$4, move4rarity=$5"; }
-
-      if (setSql) {
-        await pool.query(
-          `UPDATE pets SET ${setSql} WHERE username=$1`,
-          [req.session.username, next.name, next.type, next.power, next.rarity]
-        );
-      }
+    if (petRes.rows.length === 0) {
+      return res.status(404).json({ error: "No pet found" });
     }
 
-    const out = await pool.query("SELECT * FROM pets WHERE username = $1", [req.session.username]);
-    const petRow = out.rows[0];
-    const available_rerolls = getAvailableRerolls(petRow.level, petRow.rerolls_spent);
-    return res.json({ ...petRow, available_rerolls });
+    let pet = petRes.rows[0];
+    let newXp = (pet.xp ?? 0) + 1;
+    let newCap = pet.xp_cap ?? 10;
 
+    if (newXp >= newCap) {
+      newXp = 0;
+      newCap = Math.ceil(newCap * 1.06);
+
+      await pool.query(
+        "UPDATE pets SET xp = $2, xp_cap = $3 WHERE username = $1",
+        [req.session.username, newXp, newCap]
+      );
+
+      const leveledPet = await performLevelUp(req.session.username);
+      return res.json(leveledPet);
+    } else {
+      const upd = await pool.query(
+        "UPDATE pets SET xp = $2 WHERE username = $1 RETURNING *",
+        [req.session.username, newXp]
+      );
+      return res.json(upd.rows[0]);
+    }
+  } catch (e) {
+    console.error("XP gain error:", e);
+    return res.status(500).json({ error: "Failed to gain XP" });
+  }
+});
+
+app.post("/levelup", async (req, res) => {
+  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+  try {
+    const pet = await performLevelUp(req.session.username);
+    return res.json(pet);
   } catch (e) {
     console.error("Error level-up:", e);
     return res.status(500).json({ error: "Failed to level up" });
+  }
+});
+
+app.get("/generate-cooldown", async (req, res) => {
+  if (!req.session.username) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
+  try {
+    const { rows } = await pool.query(
+      "SELECT last_pet_generate_at FROM users WHERE username = $1",
+      [req.session.username]
+    );
+    if (rows.length === 0) return res.status(200).json({ remaining_ms: 0 });
+
+    const last = rows[0].last_pet_generate_at ? new Date(rows[0].last_pet_generate_at) : null;
+    const now = new Date();
+    if (!last) return res.status(200).json({ remaining_ms: 0 });
+
+    const diff = now.getTime() - last.getTime();
+    const remaining = Math.max(0, GENERATE_COOLDOWN_MS - diff);
+    return res.status(200).json({ remaining_ms: remaining });
+  } catch (e) {
+    console.error("cooldown status error:", e);
+    return res.status(200).json({ remaining_ms: 0 });
   }
 });
 
@@ -427,8 +524,34 @@ app.post("/generate-pet", async (req, res) => {
   }
 
   try {
+    const { rows } = await pool.query(
+      "SELECT last_pet_generate_at FROM users WHERE username = $1",
+      [req.session.username]
+    );
+    if (rows.length === 0) return res.status(400).json({ error: "User missing" });
+
+    const last = rows[0].last_pet_generate_at ? new Date(rows[0].last_pet_generate_at) : null;
+    const now = new Date();
+
+    if (last) {
+      const diff = now.getTime() - last.getTime();
+      const remaining = GENERATE_COOLDOWN_MS - diff;
+      if (remaining > 0) {
+        return res.status(429).json({
+          error: "cooldown",
+          remaining_ms: remaining
+        });
+      }
+    }
+
+    await pool.query(
+      "UPDATE users SET last_pet_generate_at = NOW() WHERE username = $1",
+      [req.session.username]
+    );
+
     const pet = await randomizePet(null);
     res.json(pet);
+
   } catch (err) {
     console.error("Error generating pet:", err);
     res.status(500).json({ error: "Failed to generate pet" });
@@ -453,7 +576,7 @@ app.post("/save-pet", async (req, res) => {
         move2name, move2type, move2damage, move2rarity,
         move3name, move3type, move3damage, move3rarity,
         move4name, move4type, move4damage, move4rarity,
-        rerolls_spent
+        rerolls_spent, xp, xp_cap
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
@@ -461,8 +584,7 @@ app.post("/save-pet", async (req, res) => {
         $15, $16, $17, $18,
         $19, $20, $21, $22,
         $23, $24, $25, $26,
-        $27, $28, $29, $30,
-        0
+        $27, $28, $29, $30, 0, $31, $32
       )
       ON CONFLICT (username) DO UPDATE SET
         name = EXCLUDED.name,
@@ -495,6 +617,8 @@ app.post("/save-pet", async (req, res) => {
         move4damage = EXCLUDED.move4damage,
         move4rarity = EXCLUDED.move4rarity,
         rerolls_spent = 0,
+        xp = EXCLUDED.xp,
+        xp_cap = EXCLUDED.xp_cap, 
         date_received = NOW()
       `,
       [
@@ -528,6 +652,9 @@ app.post("/save-pet", async (req, res) => {
         pet.move4type,
         pet.move4damage,
         pet.move4rarity,
+        (pet.xp ?? 0),
+        (pet.xp_cap ?? 10),
+
       ]
     );
 
@@ -583,9 +710,9 @@ function indexToRarity(i) {
 }
 
 function getAvailableRerolls(level, spent) {
-  const milestones = Math.max(0, Math.floor((level - 61) / 20));
+  const milestones = Math.max(0, Math.floor(level / 20));
   const s = Number.isFinite(spent) ? spent : 0;
-  const used = Math.min(s, milestones);
+  const used = Math.max(0, s);
   return Math.max(0, milestones - used);
 }
 
