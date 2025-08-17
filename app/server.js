@@ -8,28 +8,27 @@ const port = 3000;
 const hostname = "localhost";
 const randomize = require("./randomize.js");
 
-
 const pool = new pg.Pool({
   connectionString: "postgresql://neondb_owner:npg_mpqW7HL6crvz@ep-cold-base-aep1ue78-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 });
 
+const GENERATE_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
+
+
 app.use(session({
-  secret: "sdiybt-secret-code-word", 
+  secret: "sdiybt-secret-code-word",
   resave: false,
   saveUninitialized: false,
   cookie: { secure: false } // change this when moving to online server/https
 }));
 
-
-app.use(express.static("public")); 
-app.use(express.json()); 
+app.use(express.static("public"));
+app.use(express.json());
 // add any protected links through
-app.use('/protected', express.static(__dirname + '/protected'));
-
+app.use("/protected", express.static(__dirname + "/protected"));
 
 app.post("/signup", async (req, res) => {
   const { username, password } = req.body;
-
 
   if (!username || !password || typeof username !== "string" || typeof password !== "string") {
     return res.status(400).send("Invalid input");
@@ -49,7 +48,6 @@ app.post("/signup", async (req, res) => {
     res.status(500).send("User creation failed");
   }
 });
-
 
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
@@ -87,7 +85,6 @@ app.get("/", (req, res) => {
   res.sendFile(__dirname + "/public/welcome.html");
 });
 
-
 app.get("/me", (req, res) => {
   if (req.session.username) {
     res.json({ username: req.session.username });
@@ -103,120 +100,165 @@ app.get("/main", (req, res) => {
   res.sendFile(__dirname + "/protected/main.html");
 });
 
-app.get("/profile", (req, res) => {
-    if (!req.session.username) {
-        return res.redirect("/login.html");
-    }
-    res.sendFile(__dirname + "/protected/profile.html");
+app.get("/trainer", (req, res) => {
+  if (!req.session.username) {
+    return res.redirect("/login.html");
+  }
+  res.sendFile(__dirname + "/protected/trainer.html");
 });
 
-const PET_TO_MOVE_DIST = {
-  "Common":                 { weak:60, average:20, based:20, awesome:0,  legendary:0 },
-  "Uncommon":               { weak:40, average:30, based:20, awesome:10, legendary:0 },
-  "Rare":                   { weak:20, average:40, based:25, awesome:15, legendary:0 },
-  "Epic":                   { weak:10, average:20, based:40, awesome:20, legendary:10 },
-  "Mythical":               { weak:0,  average:10, based:45, awesome:30, legendary:15 },
-  "Divine":                 { weak:0,  average:10, based:20, awesome:40, legendary:30 },
-  "The One and Only":       { weak:0,  average:0,  based:0,  awesome:0,  legendary:100 }
-};
+async function performLevelUp(username) {
+  const up = await pool.query(
+    `
+    UPDATE pets
+    SET
+      level   = LEAST(COALESCE(level, 1) + 1, 100),
+      health  = COALESCE(health, 0)  + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(health_growth, 0)  ELSE 0 END,
+      attack  = COALESCE(attack, 0)  + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(attack_growth, 0)  ELSE 0 END,
+      defense = COALESCE(defense, 0) + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(defense_growth, 0) ELSE 0 END
+    WHERE username = $1
+    RETURNING *`,
+    [username]
+  );
+  if (up.rows.length === 0) throw new Error("No pet found for level up");
 
-function inWeak(power)    { return power >= 1 && power <= 49; }
-function inAverage(power) { return power >= 50 && power <= 80; }
-function inBased(power)   { return power >= 81 && power <= 100; }
-function inAwesome(power) { return power >= 101; }
+  let pet = up.rows[0];
 
-function bucketForPower(power) {
-  if (inWeak(power)) return "weak";
-  if (inAverage(power)) return "average";
-  if (inBased(power)) return "based";
-  return "awesome";
+  if ((pet.level ?? 1) >= 100) {
+    await pool.query("UPDATE pets SET xp = 0, xp_cap = 0 WHERE username = $1", [username]);
+    const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [username]);
+    pet = refetch.rows[0];
+    const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+    return { ...pet, xp: 0, xp_cap: 0, available_rerolls };
+  }
+
+  const level = pet.level;
+
+  const filledCount = (p) => {
+    let c = 0;
+    if (p.move1name) c++;
+    if (p.move2name) c++;
+    if (p.move3name) c++;
+    if (p.move4name) c++;
+    return c;
+  };
+
+  if (level >= 20 && level % 20 === 0) {
+    const allowed = Math.min(1 + Math.floor(level / 20), 4);
+    const have = filledCount(pet);
+
+    if (have < allowed) {
+      const moves = await generateMovesForPet(pet.rarity);
+
+      const known = new Set();
+      if (pet.move1name) known.add((pet.move1name || "").toLowerCase());
+      if (pet.move2name) known.add((pet.move2name || "").toLowerCase());
+      if (pet.move3name) known.add((pet.move3name || "").toLowerCase());
+      if (pet.move4name) known.add((pet.move4name || "").toLowerCase());
+
+      let next = null;
+      for (let i = 0; i < moves.length; i++) {
+        const nm = (moves[i].name || "").toLowerCase();
+        if (!known.has(nm)) { next = moves[i]; break; }
+      }
+      if (!next) next = moves[0];
+
+      let setSql = "";
+      if (!pet.move1name) { setSql = "move1name=$2, move1type=$3, move1damage=$4, move1rarity=$5"; }
+      else if (!pet.move2name) { setSql = "move2name=$2, move2type=$3, move2damage=$4, move2rarity=$5"; }
+      else if (!pet.move3name) { setSql = "move3name=$2, move3type=$3, move3damage=$4, move3rarity=$5"; }
+      else if (!pet.move4name) { setSql = "move4name=$2, move4type=$3, move4damage=$4, move4rarity=$5"; }
+
+      if (setSql) {
+        await pool.query(
+          `UPDATE pets SET ${setSql} WHERE username=$1`,
+          [username, next.name, next.type, next.power, next.rarity]
+        );
+        const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [username]);
+        pet = refetch.rows[0];
+      }
+    }
+  }
+
+  const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+  return { ...pet, available_rerolls };
 }
 
-const LEGENDARY_MOVES = [
-  {type:"normal",   name:"Explosion", power:250},
-  {type:"normal",   name:"Pulverizing Pancake", power:210},
-  {type:"normal",   name:"Self-Destruct", power:200},
-  {type:"normal",   name:"Hyper Beam", power:150},
-  {type:"fire",     name:"V-create", power:180},
-  {type:"fire",     name:"G-Max Fireball", power:160},
-  {type:"fire",     name:"Shell Trap", power:150},
-  {type:"fire",     name:"Mind Blown", power:150},
-  {type:"water",    name:"Oceanic Operetta", power:195},
-  {type:"water",    name:"G-Max Hydrosnipe", power:160},
-  {type:"water",    name:"Water Spout", power:150},
-  {type:"water",    name:"Hydro Cannon", power:150},
-  {type:"electric", name:"Catastropika", power:210},
-  {type:"electric", name:"10,000,000 Volt Thunderbolt", power:195},
-  {type:"electric", name:"Stoked Sparksurfer", power:175},
-  {type:"electric", name:"Electro Shot", power:130},
-  {type:"grass",    name:"G-Max Drum Solo", power:160},
-  {type:"grass",    name:"Frenzy Plant", power:150},
-  {type:"grass",    name:"Chloroblast", power:150},
-  {type:"grass",    name:"Leaf Storm", power:130},
-  {type:"ice",      name:"Ice Burn", power:140},
-  {type:"ice",      name:"Freeze Shock", power:140},
-  {type:"ice",      name:"Glacial Lance", power:120},
-  {type:"ice",      name:"Blizzard", power:110},
-  {type:"fighting", name:"Meteor Assault", power:150},
-  {type:"fighting", name:"Focus Punch", power:150},
-  {type:"fighting", name:"High Jump Kick", power:130},
-  {type:"fighting", name:"Superpower", power:120},
-  {type:"poison",   name:"Gunk Shot", power:120},
-  {type:"poison",   name:"Belch", power:120},
-  {type:"poison",   name:"Noxious Torque", power:100},
-  {type:"poison",   name:"Malignant Chain", power:100},
-  {type:"ground",   name:"Precipice Blades", power:120},
-  {type:"ground",   name:"Headlong Rush", power:120},
-  {type:"ground",   name:"Sandsear Storm", power:100},
-  {type:"ground",   name:"Earthquake", power:100},
-  {type:"flying",   name:"Sky Attack", power:140},
-  {type:"flying",   name:"Dragon Ascent", power:120},
-  {type:"flying",   name:"Brave Bird", power:120},
-  {type:"flying",   name:"Hurricane", power:110},
-  {type:"psychic",  name:"Light That Burns the Sky", power:200},
-  {type:"psychic",  name:"Genesis Supernova", power:185},
-  {type:"psychic",  name:"Prismatic Laser", power:160},
-  {type:"psychic",  name:"Psycho Boost", power:140},
-  {type:"bug",      name:"Megahorn", power:120},
-  {type:"bug",      name:"Pollen Puff", power:90},
-  {type:"bug",      name:"First Impression", power:90},
-  {type:"bug",      name:"Bug Buzz", power:90},
-  {type:"rock",     name:"Splintered Stormshards", power:190},
-  {type:"rock",     name:"Rock Wrecker", power:150},
-  {type:"rock",     name:"Head Smash", power:150},
-  {type:"rock",     name:"Meteor Beam", power:120},
-  {type:"ghost",    name:"Menacing Moonraze Maelstrom", power:200},
-  {type:"ghost",    name:"Soul-Stealing 7-Star Strike", power:195},
-  {type:"ghost",    name:"Sinister Arrow Raid", power:180},
-  {type:"ghost",    name:"Shadow Force", power:120},
-  {type:"dragon",   name:"Clangorous Soulblaze", power:185},
-  {type:"dragon",   name:"Eternabeam", power:160},
-  {type:"dragon",   name:"Roar of Time", power:150},
-  {type:"dragon",   name:"Dragon Energy", power:150},
-  {type:"dark",     name:"Malicious Moonsault", power:180},
-  {type:"dark",     name:"Hyperspace Fury", power:100},
-  {type:"dark",     name:"Foul Play", power:95},
-  {type:"dark",     name:"Fiery Wrath", power:90},
-  {type:"steel",    name:"Searing Sunraze Smash", power:200},
-  {type:"steel",    name:"Gigaton Hammer", power:160},
-  {type:"steel",    name:"Steel Beam", power:140},
-  {type:"steel",    name:"Doom Desire", power:140},
-  {type:"fairy",    name:"Let's Snuggle Forever", power:190},
-  {type:"fairy",    name:"Light of Ruin", power:140},
-  {type:"fairy",    name:"Fleur Cannon", power:130},
-  {type:"fairy",    name:"Springtide Storm", power:100}
-];
+const PET_TO_MOVE_DIST = {
+  "Common":           { weak:60,  average:20,  based:15,  awesome:5, legendary:0 },
+  "Uncommon":         { weak:40, average:30, based:20, awesome:10,  legendary:0 },
+  "Rare":             { weak:20, average:40, based:25, awesome:15,  legendary:0 },
+  "Epic":             { weak:10, average:20, based:40, awesome:20,  legendary:10 },
+  "Mythical":         { weak:0,  average:10, based:45, awesome:30,  legendary:15 },
+  "Divine":           { weak:0,  average:10, based:20, awesome:40,  legendary:30 },
+  "The One and Only": { weak:0,  average:0,  based:0,  awesome:0,   legendary:100 }
+};
 
-function pickLegendary(excludeLower) {
-  var pool = [];
-  for (var i = 0; i < LEGENDARY_MOVES.length; i++) {
-    var nm = LEGENDARY_MOVES[i].name.toLowerCase();
-    if (!excludeLower.has(nm)) pool.push(LEGENDARY_MOVES[i]);
+
+function inWeak(power)       { return power >= 1   && power <= 49; }
+function inAverage(power)    { return power >= 50  && power <= 80; }
+function inBased(power)      { return power >= 81  && power <= 100; }
+function inAwesome(power)    { return power >= 101 && power <= 135; }
+function inLegendary(power)  { return power > 135; }
+
+function bucketForPower(power) {
+  if (inLegendary(power)) return "legendary";
+  if (inAwesome(power))   return "awesome";
+  if (inBased(power))     return "based";
+  if (inAverage(power))   return "average";
+  if (inWeak(power))      return "weak";
+  return null;
+}
+
+const moveCache = new Map();
+const bucketPools = {
+  weak: [], average: [], based: [], awesome: [], legendary: []
+};
+
+function bucketFromPower(p) {
+  if (p > 135) return "legendary";
+  if (p >= 101) return "awesome";
+  if (p >= 81)  return "based";
+  if (p >= 50)  return "average";
+  if (p >= 1)   return "weak";
+  return null;
+}
+
+function pushIntoBucketPools(moveJson) {
+  const p = typeof moveJson.power === "number" ? moveJson.power : 0;
+  const b = bucketFromPower(p);
+  if (!b) return;
+  const apiName = (moveJson.name || "").toLowerCase();         
+  const displayName = apiName.replace(/-/g, " ");              
+  const typeField = moveJson.type?.name || "normal";
+  bucketPools[b].push({ name: displayName, type: typeField, power: p, rarity: b });
+}
+
+async function fetchMoveById(id) {
+  if (moveCache.has(id)) return moveCache.get(id);
+  const res = await fetch(`https://pokeapi.co/api/v2/move/${id}`);
+  if (!res.ok) throw new Error("Move fetch failed");
+  const json = await res.json();
+  moveCache.set(id, json);
+
+  const power = typeof json.power === "number" ? json.power : 0;
+  if (power > 0) pushIntoBucketPools(json);
+  return json;
+}
+
+function pickLocalFromBucket(bucket, excludeLower) {
+  const pool = bucketPools[bucket];
+  if (!pool || pool.length === 0) return null;
+
+  for (let tries = 0; tries < 12; tries++) {
+    const m = pool[Math.floor(Math.random() * pool.length)];
+    if (!excludeLower.has(m.name.toLowerCase())) return m;
   }
-  if (pool.length === 0) return null;
-  var idx = Math.floor(Math.random() * pool.length);
-  var m = pool[idx];
-  return { name: m.name, type: m.type, power: m.power, rarity: "legendary" };
+
+  for (const m of pool) {
+    if (!excludeLower.has(m.name.toLowerCase())) return m;
+  }
+  return null;
 }
 
 function rollBucket(weights) {
@@ -231,83 +273,66 @@ function rollBucket(weights) {
   return keys[keys.length - 1];
 }
 
+
 async function pickDamagingMoveFromBucket(bucket, excludeLower, tries) {
+  const local = pickLocalFromBucket(bucket, excludeLower);
+  if (local) return local;
+
+  const MAX_NETWORK_SEED = Math.min(tries, 10);
   let t = 0;
-  while (t < tries) {
+
+  while (t < MAX_NETWORK_SEED) {
     const id = Math.floor(Math.random() * 920) + 1;
-    const res = await fetch(`https://pokeapi.co/api/v2/move/${id}`);
-    if (res.ok) {
-      const m = await res.json();
+    try {
+      const m = await fetchMoveById(id);
       const power = typeof m.power === "number" ? m.power : 0;
       if (power > 0) {
-        let ok = false;
-        if (bucket === "weak")    ok = inWeak(power);
-        if (bucket === "average") ok = inAverage(power);
-        if (bucket === "based")   ok = inBased(power);
-        if (bucket === "awesome") ok = inAwesome(power);
-        if (ok) {
-          const raw = m.name;
-          const name = raw.replace(/-/g, " ");
-          const lower = name.toLowerCase();
-          if (!excludeLower.has(lower)) {
-            const typeField = m.type && m.type.name ? m.type.name : "normal";
-            const rar = bucketForPower(power);
-            return { name: name, type: typeField, power: power, rarity: rar };
-          }
-        }
+        const candidate = pickLocalFromBucket(bucket, excludeLower);
+        if (candidate) return candidate;
       }
+    } catch (_) {
+
     }
     t += 1;
   }
+
   return null;
 }
 
 async function generateMovesForPet(petRarity) {
   const exclude = new Set();
   const out = [];
+
+  const weights = PET_TO_MOVE_DIST[petRarity] || PET_TO_MOVE_DIST["Common"];
+  const mustLegendaryOnly = (weights.legendary === 100);
+  const order = ["legendary", "awesome", "based", "average", "weak"];
+
   while (out.length < 4) {
-    const weights = PET_TO_MOVE_DIST[petRarity] || PET_TO_MOVE_DIST["Common"];
     let bucket = rollBucket(weights);
-
-    if (bucket === "legendary") {
-      const leg = pickLegendary(exclude);
-      if (leg !== null) {
-        exclude.add(leg.name.toLowerCase());
-        out.push(leg);
-        continue;
-      } else {
-        bucket = "awesome";
-      }
-    }
-
-    const order = ["awesome", "based", "average", "weak"];
-    let start = 0;
-    let i = 0;
-    for (i = 0; i < order.length; i++) {
-      if (order[i] === bucket) {
-        start = i;
-        break;
-      }
-    }
+    if (mustLegendaryOnly) bucket = "legendary";
 
     let pick = null;
-    let j = start;
-    while (j < order.length && pick === null) {
-      pick = await pickDamagingMoveFromBucket(order[j], exclude, 40);
-      j += 1;
-    }
-    if (pick === null) {
-      const lastTry = pickLegendary(exclude);
-      if (lastTry !== null) {
-        exclude.add(lastTry.name.toLowerCase());
-        out.push(lastTry);
-      } else {
-        throw new Error("No suitable move found");
+
+    if (bucket === "legendary") {
+      for (let attempts = 0; attempts < 6 && pick === null; attempts++) {
+        pick = await pickDamagingMoveFromBucket("legendary", exclude, 80);
       }
+      if (pick === null) continue;
     } else {
-      exclude.add(pick.name.toLowerCase());
-      out.push(pick);
+      let start = order.indexOf(bucket);
+      if (start < 0) start = 0;
+
+      for (let j = start; j < order.length && pick === null; j++) {
+        pick = await pickDamagingMoveFromBucket(order[j], exclude, 40);
+      }
+      for (let j = start - 1; j >= 0 && pick === null; j--) {
+        pick = await pickDamagingMoveFromBucket(order[j], exclude, 40);
+      }
+      if (pick === null) throw new Error("No suitable move found");
     }
+
+    exclude.add(pick.name.toLowerCase());
+    out.push(pick);
   }
   return out;
 }
@@ -336,7 +361,7 @@ async function randomizePet(sessionUser) {
   if (moves.length > allowed) moves = moves.slice(0, allowed);
 
   const pet = {
-    username: sessionUser || null, 
+    username: sessionUser || null,
     name: "NO NAME",
     rarity: rarity,
     sprite: sprite,
@@ -350,11 +375,13 @@ async function randomizePet(sessionUser) {
     defense_growth,
     speed,
     type,
-    
     move1name: null, move1type: null, move1damage: null, move1rarity: null,
     move2name: null, move2type: null, move2damage: null, move2rarity: null,
     move3name: null, move3type: null, move3damage: null, move3rarity: null,
-    move4name: null, move4type: null, move4damage: null, move4rarity: null
+    move4name: null, move4type: null, move4damage: null, move4rarity: null,
+    xp: 0,
+    xp_cap: 10,
+
   };
 
   for (let i = 0; i < moves.length; i++) {
@@ -398,66 +425,100 @@ const SAVABLE_FIELDS = new Set([
   "move4type",
   "move4damage",
   "move4rarity",
+  "xp",
+  "xp_cap"
 ]);
 
-app.post("/test/levelup20", async (req, res) => {
-  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+app.post("/gain-xp", async (req, res) => {
+  if (!req.session.username) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
 
   try {
-    const up = await pool.query(
-      "UPDATE pets SET level = COALESCE(level, 1) + 20 WHERE username = $1 RETURNING *",
+    const petRes = await pool.query(
+      "SELECT * FROM pets WHERE username = $1",
       [req.session.username]
     );
-    if (up.rows.length === 0) return res.status(404).json({ error: "No pet found" });
-
-    const pet = up.rows[0];
-    const allowed = Math.min(1 + Math.floor((pet.level - 1) / 20), 4);
-
-    function filledCount(p) {
-      let c = 0;
-      if (p.move1name) c += 1;
-      if (p.move2name) c += 1;
-      if (p.move3name) c += 1;
-      if (p.move4name) c += 1;
-      return c;
+    if (petRes.rows.length === 0) {
+      return res.status(404).json({ error: "No pet found" });
     }
 
-    let have = filledCount(pet);
-    if (have < allowed) {
-      const moves = await generateMovesForPet(pet.rarity);
-      const known = new Set();
-      if (pet.move1name) known.add(pet.move1name.toLowerCase());
-      if (pet.move2name) known.add(pet.move2name.toLowerCase());
-      if (pet.move3name) known.add(pet.move3name.toLowerCase());
-      if (pet.move4name) known.add(pet.move4name.toLowerCase());
+    let pet = petRes.rows[0];
 
-      let next = null;
-      for (let i = 0; i < moves.length; i++) {
-        const nm = moves[i].name.toLowerCase();
-        if (!known.has(nm)) { next = moves[i]; break; }
-      }
-      if (!next) next = moves[0];
-
-      let setSql = "", vals = [];
-      if (!pet.move1name) { setSql = "move1name=$2, move1type=$3, move1damage=$4, move1rarity=$5"; }
-      else if (!pet.move2name) { setSql = "move2name=$2, move2type=$3, move2damage=$4, move2rarity=$5"; }
-      else if (!pet.move3name) { setSql = "move3name=$2, move3type=$3, move3damage=$4, move3rarity=$5"; }
-      else if (!pet.move4name) { setSql = "move4name=$2, move4type=$3, move4damage=$4, move4rarity=$5"; }
-
-      if (setSql) {
+    if ((pet.level ?? 1) >= 100) {
+      if ((pet.xp ?? 0) !== 0 || (pet.xp_cap ?? 0) !== 0) {
         await pool.query(
-          `UPDATE pets SET ${setSql} WHERE username=$1`,
-          [req.session.username, next.name, next.type, next.power, next.rarity]
+          "UPDATE pets SET xp = 0, xp_cap = 0 WHERE username = $1",
+          [req.session.username]
         );
+        const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [req.session.username]);
+        pet = refetch.rows[0];
       }
+      const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+      return res.json({ ...pet, xp: 0, xp_cap: 0, available_rerolls });
     }
 
-    const out = await pool.query("SELECT * FROM pets WHERE username = $1", [req.session.username]);
-    return res.json(out.rows[0]);
+    let newXp = (pet.xp ?? 0) + 1;
+    let newCap = pet.xp_cap ?? 10;
 
+    if (newXp >= newCap) {
+      newXp = 0;
+      newCap = Math.ceil(newCap * 1.06);
+
+      await pool.query(
+        "UPDATE pets SET xp = $2, xp_cap = $3 WHERE username = $1",
+        [req.session.username, newXp, newCap]
+      );
+
+      const leveledPet = await performLevelUp(req.session.username);
+      return res.json(leveledPet);
+    } else {
+      const upd = await pool.query(
+        "UPDATE pets SET xp = $2 WHERE username = $1 RETURNING *",
+        [req.session.username, newXp]
+      );
+      const pet2 = upd.rows[0];
+      const available_rerolls = getAvailableRerolls(pet2.level, pet2.rerolls_spent);
+      return res.json({ ...pet2, available_rerolls });
+    }
+  } catch (e) {
+    console.error("XP gain error:", e);
+    return res.status(500).json({ error: "Failed to gain XP" });
+  }
+});
+
+app.post("/levelup", async (req, res) => {
+  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+  try {
+    const pet = await performLevelUp(req.session.username);
+    return res.json(pet);
   } catch (e) {
     console.error("Error level-up:", e);
     return res.status(500).json({ error: "Failed to level up" });
+  }
+});
+
+app.get("/generate-cooldown", async (req, res) => {
+  if (!req.session.username) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
+  try {
+    const { rows } = await pool.query(
+      "SELECT last_pet_generate_at FROM users WHERE username = $1",
+      [req.session.username]
+    );
+    if (rows.length === 0) return res.status(200).json({ remaining_ms: 0 });
+
+    const last = rows[0].last_pet_generate_at ? new Date(rows[0].last_pet_generate_at) : null;
+    const now = new Date();
+    if (!last) return res.status(200).json({ remaining_ms: 0 });
+
+    const diff = now.getTime() - last.getTime();
+    const remaining = Math.max(0, GENERATE_COOLDOWN_MS - diff);
+    return res.status(200).json({ remaining_ms: remaining });
+  } catch (e) {
+    console.error("cooldown status error:", e);
+    return res.status(200).json({ remaining_ms: 0 });
   }
 });
 
@@ -477,10 +538,35 @@ app.post("/generate-pet", async (req, res) => {
     return res.status(401).json({ error: "Not logged in" });
   }
 
-
   try {
-    const pet = await randomizePet(null); 
+    const { rows } = await pool.query(
+      "SELECT last_pet_generate_at FROM users WHERE username = $1",
+      [req.session.username]
+    );
+    if (rows.length === 0) return res.status(400).json({ error: "User missing" });
+
+    const last = rows[0].last_pet_generate_at ? new Date(rows[0].last_pet_generate_at) : null;
+    const now = new Date();
+
+    if (last) {
+      const diff = now.getTime() - last.getTime();
+      const remaining = GENERATE_COOLDOWN_MS - diff;
+      if (remaining > 0) {
+        return res.status(429).json({
+          error: "cooldown",
+          remaining_ms: remaining
+        });
+      }
+    }
+
+    await pool.query(
+      "UPDATE users SET last_pet_generate_at = NOW() WHERE username = $1",
+      [req.session.username]
+    );
+
+    const pet = await randomizePet(null);
     res.json(pet);
+
   } catch (err) {
     console.error("Error generating pet:", err);
     res.status(500).json({ error: "Failed to generate pet" });
@@ -504,7 +590,8 @@ app.post("/save-pet", async (req, res) => {
         move1name, move1type, move1damage, move1rarity,
         move2name, move2type, move2damage, move2rarity,
         move3name, move3type, move3damage, move3rarity,
-        move4name, move4type, move4damage, move4rarity
+        move4name, move4type, move4damage, move4rarity,
+        rerolls_spent, xp, xp_cap
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
@@ -512,7 +599,7 @@ app.post("/save-pet", async (req, res) => {
         $15, $16, $17, $18,
         $19, $20, $21, $22,
         $23, $24, $25, $26,
-        $27, $28, $29, $30
+        $27, $28, $29, $30, 0, $31, $32
       )
       ON CONFLICT (username) DO UPDATE SET
         name = EXCLUDED.name,
@@ -544,6 +631,9 @@ app.post("/save-pet", async (req, res) => {
         move4type = EXCLUDED.move4type,
         move4damage = EXCLUDED.move4damage,
         move4rarity = EXCLUDED.move4rarity,
+        rerolls_spent = 0,
+        xp = EXCLUDED.xp,
+        xp_cap = EXCLUDED.xp_cap, 
         date_received = NOW()
       `,
       [
@@ -577,6 +667,9 @@ app.post("/save-pet", async (req, res) => {
         pet.move4type,
         pet.move4damage,
         pet.move4rarity,
+        (pet.xp ?? 0),
+        (pet.xp_cap ?? 10),
+
       ]
     );
 
@@ -606,12 +699,123 @@ app.get("/my-pet", async (req, res) => {
       return res.status(404).json({ error: "No pet found" });
     }
 
+    const petRow = result.rows[0];
+    const available_rerolls = getAvailableRerolls(petRow.level, petRow.rerolls_spent);
+
+    console.log("LVL:", petRow.level, "spent:", petRow.rerolls_spent, "avail:", available_rerolls);
+
     console.log("Pet retrieved for:", req.session.username);
-    res.json(result.rows[0]);
+    res.json({ ...petRow, available_rerolls });
 
   } catch (err) {
     console.error("Error fetching pet:", err);
     res.status(500).json({ error: "Failed to retrieve pet" });
+  }
+});
+
+function rarityToIndex(r) {
+  return ["weak","average","based","awesome","legendary"].indexOf(r);
+}
+
+function indexToRarity(i) {
+  const arr = ["weak","average","based","awesome","legendary"];
+  if (i < 0) i = 0;
+  if (i >= arr.length) i = arr.length - 1;
+  return arr[i];
+}
+
+function getAvailableRerolls(level, spent) {
+  const totalMilestones =
+    level < 80 ? 0 :
+    level >= 100 ? 2 : 1;
+
+  const used = Math.max(0, Number.isFinite(spent) ? spent : 0);
+  const available = Math.max(0, totalMilestones - used);
+  return available;
+}
+
+const REROLL_ODDS = {
+  "Common":           { same: 60, up1: 40, up2: 0 },
+  "Uncommon":         { same: 45, up1: 50, up2: 5 },
+  "Rare":             { same: 40, up1: 50, up2: 10 },
+  "Epic":             { same: 30, up1: 55, up2: 15 },
+  "Mythical":         { same: 20, up1: 60, up2: 20 },
+  "Divine":           { same: 10, up1: 60, up2: 30 },
+  "The One and Only": { same: 100, up1: 0,  up2: 0 }
+};
+
+function rollRerollStep(odds) {
+  const r = Math.random() * 100;
+  if (r < odds.same) return 0;
+  if (r < odds.same + odds.up1) return 1;
+  return 2;
+}
+
+app.post("/reroll-move", async (req, res) => {
+  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+
+  const { slot } = req.body;
+  if (![1,2,3,4].includes(slot)) return res.status(400).json({ error: "Invalid slot" });
+
+  try {
+    const q = await pool.query("SELECT * FROM pets WHERE username=$1", [req.session.username]);
+    if (q.rows.length === 0) return res.status(404).json({ error: "No pet found" });
+
+    const pet = q.rows[0];
+    const available = getAvailableRerolls(pet.level, pet.rerolls_spent);
+    if (available <= 0) return res.status(400).json({ error: "No rerolls available" });
+
+    const nameKey   = `move${slot}name`;
+    const typeKey   = `move${slot}type`;
+    const dmgKey    = `move${slot}damage`;
+    const rarKey    = `move${slot}rarity`;
+
+    if (!pet[nameKey] || typeof pet[dmgKey] !== "number" || pet[dmgKey] <= 0) {
+      return res.status(400).json({ error: "Selected slot has no damaging move" });
+    }
+
+    const currentPower  = pet[dmgKey];
+    const currentBucket = bucketForPower(currentPower);
+    const odds          = REROLL_ODDS[pet.rarity] || REROLL_ODDS["Common"];
+    const step          = rollRerollStep(odds);
+    const targetBucket  = indexToRarity(rarityToIndex(currentBucket) + step);
+
+    const exclude = new Set();
+    for (let i = 1; i <= 4; i++) {
+      const nm = (pet[`move${i}name`] || "").toLowerCase();
+      if (nm) exclude.add(nm);
+    }
+
+    let pick = null;
+    const order = ["legendary","awesome","based","average","weak"];
+    const targetIdx = order.indexOf(targetBucket);
+    const searchOrder = [targetIdx, targetIdx-1, targetIdx+1, targetIdx-2, targetIdx+2]
+      .filter(i => i >= 0 && i < order.length)
+      .map(i => order[i]);
+
+    for (const b of searchOrder) {
+      pick = await pickDamagingMoveFromBucket(b, exclude, 60);
+      if (pick) break;
+    }
+    if (!pick) return res.status(500).json({ error: "Failed to find a replacement move" });
+
+    const updateSql = `
+      UPDATE pets
+      SET ${nameKey}=$2, ${typeKey}=$3, ${dmgKey}=$4, ${rarKey}=$5,
+          rerolls_spent = COALESCE(rerolls_spent, 0) + 1
+      WHERE username=$1
+      RETURNING *`;
+    const upd = await pool.query(updateSql, [
+      req.session.username, pick.name, pick.type, pick.power, pick.rarity
+    ]);
+
+    const updated = upd.rows[0];
+    const available_rerolls = getAvailableRerolls(updated.level, updated.rerolls_spent);
+    return res.json({ ...updated, available_rerolls });
+
+  } catch (e) {
+    console.error("Reroll error:", e);
+    return res.status(500).json({ error: "Reroll failed" });
   }
 });
 

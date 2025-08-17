@@ -1,8 +1,8 @@
 let currentPet = null;
+let GENERATE_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
 
 var generateBtn = document.getElementById("generate");
 var saveBtn = document.getElementById("savepet");
-var levelBtn = document.getElementById("level20");
 
 var messageDiv = document.createElement("div");
 messageDiv.style.textAlign = "center";
@@ -10,6 +10,7 @@ messageDiv.style.marginTop = "10px";
 document.body.appendChild(messageDiv);
 
 saveBtn.disabled = true;
+let cooldownTimer = null;
 
 var modalOverlay = document.createElement("div");
 modalOverlay.style.position = "fixed";
@@ -76,6 +77,51 @@ function inferMoveRarity(name, dmg) {
   if (dmg >= 50 && dmg <= 80) return "average";
   if (dmg >= 81 && dmg <= 100) return "based";
   return "awesome";
+}
+
+function startCooldown(ms) {
+  if (!generateBtn) return;
+  let remaining = Math.max(0, Math.floor(ms / 1000)); 
+  generateBtn.disabled = true;
+
+  function tick() {
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    generateBtn.textContent = `Generate (wait ${m}:${String(s).padStart(2, "0")})`;
+    if (remaining <= 0) {
+      clearInterval(cooldownTimer);
+      cooldownTimer = null;
+      generateBtn.disabled = false;
+      generateBtn.textContent = "Generate Pet";
+      return;
+    }
+    remaining -= 1;
+  }
+
+  tick();
+  cooldownTimer = setInterval(tick, 1000);
+}
+
+function checkGenerateCooldownOnLoad() {
+  fetch("/generate-cooldown", { credentials: "include" })
+    .then(function (res) {
+      if (!res.ok) throw new Error("status check failed");
+      return res.json();
+    })
+    .then(function (j) {
+      var ms = Number(j.remaining_ms) || 0;
+      if (ms > 0) {
+        messageDiv.textContent = "You must wait before generating again.";
+        startCooldown(ms);
+      } else {
+        if (generateBtn) {
+          generateBtn.disabled = false;
+          generateBtn.textContent = "Generate Pet";
+        }
+      }
+    })
+    .catch(function () {
+    });
 }
 
 function displayPet(data) {
@@ -161,13 +207,23 @@ if (generateBtn) {
       credentials: "include"
     })
       .then(function (res) {
+        if (res.status === 429) {
+          return res.json().then(function (j) {
+            const ms = Number(j.remaining_ms) || 0;
+            messageDiv.textContent = "You must wait before generating again.";
+            startCooldown(ms);
+            throw new Error("On cooldown");
+          });
+        }
         if (!res.ok) throw new Error("Failed to generate pet");
         return res.json();
       })
       .then(function (data) {
         displayPet(data);
+        startCooldown(GENERATE_COOLDOWN_MS);
       })
       .catch(function (err) {
+        if (err && err.message === "On cooldown") return;
         console.error("Failed to generate pet", err);
       });
   });
@@ -228,25 +284,4 @@ modalCancelBtn.addEventListener("click", function () {
   modalOverlay.style.display = "none";
 });
 
-if (levelBtn) {
-  levelBtn.addEventListener("click", function () {
-    fetch("/test/levelup20", {
-      method: "POST",
-      credentials: "include"
-    })
-      .then(function (res) {
-        if (res.status === 404) {
-          alert("No saved pet. Generate and Save first.");
-          return null;
-        }
-        if (!res.ok) throw new Error("Failed to level up");
-        return res.json();
-      })
-      .then(function (row) {
-        if (row) displayPet(row);
-      })
-      .catch(function (err) {
-        console.error("Level up failed:", err);
-      });
-  });
-}
+checkGenerateCooldownOnLoad();

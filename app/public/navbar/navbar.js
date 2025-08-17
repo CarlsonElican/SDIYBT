@@ -18,10 +18,10 @@ fetch('/navbar/navbar.html')
             });
         }
 
-        let profileBtn = document.getElementById("profile");
-        if (profileBtn) {
-            profileBtn.addEventListener("click", function() {
-                window.location.href = "/profile";
+        let trainerBtn = document.getElementById("trainer");
+        if (trainerBtn) {
+            trainerBtn.addEventListener("click", function() {
+                window.location.href = "/trainer";
             });
         }
 
