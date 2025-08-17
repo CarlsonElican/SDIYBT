@@ -121,7 +121,17 @@ async function performLevelUp(username) {
     [username]
   );
   if (up.rows.length === 0) throw new Error("No pet found for level up");
+
   let pet = up.rows[0];
+
+  if ((pet.level ?? 1) >= 100) {
+    await pool.query("UPDATE pets SET xp = 0, xp_cap = 0 WHERE username = $1", [username]);
+    const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [username]);
+    pet = refetch.rows[0];
+    const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+    return { ...pet, xp: 0, xp_cap: 0, available_rerolls };
+  }
+
   const level = pet.level;
 
   const filledCount = (p) => {
@@ -164,20 +174,9 @@ async function performLevelUp(username) {
           `UPDATE pets SET ${setSql} WHERE username=$1`,
           [username, next.name, next.type, next.power, next.rarity]
         );
+        const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [username]);
+        pet = refetch.rows[0];
       }
-
-      await pool.query(
-        `UPDATE pets SET rerolls_spent = COALESCE(rerolls_spent,0) + 1 WHERE username=$1`,
-        [username]
-      );
-
-      const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [username]);
-      pet = refetch.rows[0];
-    } else {
-      await pool.query(
-        `UPDATE pets SET rerolls_spent = COALESCE(rerolls_spent,0) + 1 WHERE username=$1`,
-        [username]
-      );
     }
   }
 
@@ -445,6 +444,20 @@ app.post("/gain-xp", async (req, res) => {
     }
 
     let pet = petRes.rows[0];
+
+    if ((pet.level ?? 1) >= 100) {
+      if ((pet.xp ?? 0) !== 0 || (pet.xp_cap ?? 0) !== 0) {
+        await pool.query(
+          "UPDATE pets SET xp = 0, xp_cap = 0 WHERE username = $1",
+          [req.session.username]
+        );
+        const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [req.session.username]);
+        pet = refetch.rows[0];
+      }
+      const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+      return res.json({ ...pet, xp: 0, xp_cap: 0, available_rerolls });
+    }
+
     let newXp = (pet.xp ?? 0) + 1;
     let newCap = pet.xp_cap ?? 10;
 
@@ -464,7 +477,9 @@ app.post("/gain-xp", async (req, res) => {
         "UPDATE pets SET xp = $2 WHERE username = $1 RETURNING *",
         [req.session.username, newXp]
       );
-      return res.json(upd.rows[0]);
+      const pet2 = upd.rows[0];
+      const available_rerolls = getAvailableRerolls(pet2.level, pet2.rerolls_spent);
+      return res.json({ ...pet2, available_rerolls });
     }
   } catch (e) {
     console.error("XP gain error:", e);
@@ -710,10 +725,13 @@ function indexToRarity(i) {
 }
 
 function getAvailableRerolls(level, spent) {
-  const milestones = Math.max(0, Math.floor(level / 20));
-  const s = Number.isFinite(spent) ? spent : 0;
-  const used = Math.max(0, s);
-  return Math.max(0, milestones - used);
+  const totalMilestones =
+    level < 80 ? 0 :
+    level >= 100 ? 2 : 1;
+
+  const used = Math.max(0, Number.isFinite(spent) ? spent : 0);
+  const available = Math.max(0, totalMilestones - used);
+  return available;
 }
 
 const REROLL_ODDS = {
