@@ -107,6 +107,28 @@ app.get("/trainer", (req, res) => {
   res.sendFile(__dirname + "/protected/trainer.html");
 });
 
+app.get("/leaderboard", (req, res) => {
+  if (!req.session.username) {
+    return res.redirect("/login.html");
+  }
+  res.sendFile(__dirname + "/protected/leaderboard.html");
+});
+
+app.get("/api/leaderboard", async (req, res) => {
+  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+
+  try {
+    const q = await pool.query(
+      `SELECT username, name, level, rarity
+         FROM pets`
+    );
+    res.json(q.rows); 
+  } catch (e) {
+    console.error("leaderboard list error:", e);
+    res.status(500).json({ error: "Failed to fetch leaderboard" });
+  }
+});
+
 async function performLevelUp(username) {
   const up = await pool.query(
     `
@@ -710,6 +732,25 @@ app.get("/my-pet", async (req, res) => {
   } catch (err) {
     console.error("Error fetching pet:", err);
     res.status(500).json({ error: "Failed to retrieve pet" });
+  }
+});
+
+app.get("/pet/:username", async (req, res) => {
+  const target = req.params.username;
+  if (!target) return res.status(400).json({ error: "Missing username" });
+
+  try {
+    const { rows } = await pool.query("SELECT * FROM pets WHERE username = $1", [target]);
+    if (rows.length === 0) return res.status(404).json({ error: "No pet found" });
+
+    const pet = rows[0];
+
+    const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+
+    return res.json({ ...pet, available_rerolls });
+  } catch (err) {
+    console.error("Error fetching pet profile:", err);
+    return res.status(500).json({ error: "Failed to retrieve profile" });
   }
 });
 
