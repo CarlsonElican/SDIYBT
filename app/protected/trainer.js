@@ -182,4 +182,45 @@ document.getElementById("xpgain")?.addEventListener("click", function() {
     });
 });
 
+function initializeAvatar() {
+  fetch("/me", { credentials: "include" })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      const img = document.getElementById("avatar-img");
+      const nameEl = document.getElementById("trainer-username");
+      if (data?.avatar_url && img) {
+        img.src = data.avatar_url + "?t=" + Date.now();
+      }
+      if (data?.username && nameEl) {
+        nameEl.textContent = data.username;
+      }
+    })
+    .catch(() => {});
+
+  const form = document.getElementById("avatar-form");
+  const fileInput = document.getElementById("avatar-file");
+  if (!form || !fileInput) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!fileInput.files.length) return alert("Choose an image file first");
+
+    const formData = new FormData();
+    formData.append("avatar", fileInput.files[0]);
+
+    const res = await fetch("/upload-avatar", {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return alert(json.error || "Upload failed");
+
+    const img = document.getElementById("avatar-img");
+    if (img) img.src = json.avatar_url + "?t=" + Date.now();
+  });
+}
+
+initializeAvatar();
 loadPet();

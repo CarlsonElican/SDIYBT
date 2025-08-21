@@ -165,6 +165,10 @@ if (thead) {
     thead.innerHTML = "";
     const tr = document.createElement("tr");
 
+    const thProfile = document.createElement("th");
+    thProfile.textContent = "Profile";
+    tr.appendChild(thProfile);
+
     const thUser = document.createElement("th");
     thUser.textContent = "User";
     tr.appendChild(thUser);
@@ -200,6 +204,17 @@ sorted.forEach(row => {
     const petName  = row.name || row.pet_name || "(unnamed)";
     const level    = row.level ?? "";
     const rarity   = row.rarity || "";
+    
+    const tdProfile = document.createElement("td");
+    const img = document.createElement("img");
+    img.src = row.avatar_url || "/uploads/catstare.png";
+    img.alt = `${username}'s avatar`;
+    img.style.width = "36px";
+    img.style.height = "36px";
+    img.style.objectFit = "cover";
+    img.style.borderRadius = "50%";
+    tdProfile.appendChild(img);
+    tr.appendChild(tdProfile);
 
     const tdUser = document.createElement("td");
     const link = document.createElement("a");

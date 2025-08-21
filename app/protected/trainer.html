@@ -33,6 +33,42 @@
       0%   { background-position: 0 0,   0% 0; }
       100% { background-position: 0 0, 100% 0; }
     }
+
+    .trainer-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 20px;
+      max-width: 1100px;
+      margin: 20px auto;
+      align-items: start;
+    }
+    .trainer-sidebar {
+      border: 1px solid #ddd;
+      padding: 16px;
+      border-radius: 10px;
+      background: #fafafa;
+      text-align: center;
+    }
+    .avatar {
+      width: 200px;
+      height: 200px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid #ccc;
+      background: #f0f0f0;
+      display: block;
+      margin: 0 auto 10px auto;
+    }
+    .username {
+      font-weight: bold;
+      margin: 8px 0 14px 0;
+    }
+    .upload-hint {
+      font-size: 12px;
+      color: #666;
+      margin-top: 6px;
+      line-height: 1.3;
+    }
   </style>
 </head>
 <body>
@@ -41,10 +77,23 @@
   <div style="text-align:center; margin-top: 16px;">
     <button id="levelup">Level Up</button>
     <button id="xpgain">Get 1 XP</button>
-
   </div>
 
-  <div id="pet-container" style="display: flex; justify-content: center; margin-top: 20px;"></div>
+  <div class="trainer-layout">
+    <aside class="trainer-sidebar">
+      <img id="avatar-img" class="avatar" src="/uploads/catstare.png" alt="Trainer Avatar">
+      <div id="trainer-username" class="username">…</div>
+
+      <form id="avatar-form" enctype="multipart/form-data">
+        <input id="avatar-file" type="file" name="avatar" accept="image/*">
+        <button type="submit" style="margin-top:8px;">Upload</button>
+      </form>
+      <div class="upload-hint">Max ~1 MB, square image looks best (e.g. 256×256).</div>
+    </aside>
+
+    <div id="pet-container" style="display: flex; justify-content: center; margin-top: 20px;"></div>
+  </div>
+
 
   <script src="navbar/navbar.js"></script>
   <script src="/protected/trainer.js"></script>
