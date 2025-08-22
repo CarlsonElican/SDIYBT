@@ -198,58 +198,58 @@ const sorted = applySort(rows);
 
 tbody.innerHTML = "";
 sorted.forEach(row => {
-    const tr = document.createElement("tr");
+  const tr = document.createElement("tr");
 
-    const username = row.username || row.user || "";
-    const petName  = row.name || row.pet_name || "(unnamed)";
-    const level    = row.level ?? "";
-    const rarity   = row.rarity || "";
-    
-    const tdProfile = document.createElement("td");
-    const img = document.createElement("img");
-    img.src = row.avatar_url || "/uploads/catstare.png";
-    img.alt = `${username}'s avatar`;
-    img.style.width = "36px";
-    img.style.height = "36px";
-    img.style.objectFit = "cover";
-    img.style.borderRadius = "50%";
-    tdProfile.appendChild(img);
-    tr.appendChild(tdProfile);
+  const username = row.username || row.user || "";
+  const petName  = row.name || row.pet_name || "(unnamed)";
+  const level    = row.level ?? "";
+  const rarity   = row.rarity || "";
 
-    const tdUser = document.createElement("td");
-    const link = document.createElement("a");
-    link.href = "#";
-    link.textContent = username;
-    link.addEventListener("click", (e) => {
+  const tdProfile = document.createElement("td");
+  const img = document.createElement("img");
+  img.src = row.avatar_url || "/uploads/catstare.png";
+  img.alt = `${username}'s avatar`;
+  img.style.width = "36px";
+  img.style.height = "36px";
+  img.style.objectFit = "cover";
+  img.style.borderRadius = "50%";
+  tdProfile.appendChild(img);
+  tr.appendChild(tdProfile);
+
+  const tdUser = document.createElement("td");
+  tdUser.textContent = username;
+  tr.appendChild(tdUser);
+
+  const tdPet = document.createElement("td");
+  const petLink = document.createElement("a");
+  petLink.href = "#";
+  petLink.textContent = petName;
+  petLink.addEventListener("click", (e) => {
     e.preventDefault();
     if (!username) return;
     fetch(`/pet/${encodeURIComponent(username)}`, { credentials: "include" })
-        .then(res => {
+      .then(res => {
         if (!res.ok) return res.json().then(e => { throw new Error(e.error || "Failed to get profile"); });
         return res.json();
-        })
-        .then(pet => openProfileModal(pet))
-        .catch(err => {
+      })
+      .then(pet => openProfileModal(pet))
+      .catch(err => {
         alert(err.message || "Failed to get profile");
         console.error(err);
-        });
-    });
-    tdUser.appendChild(link);
-    tr.appendChild(tdUser);
+      });
+  });
+  tdPet.appendChild(petLink);
+  tr.appendChild(tdPet);
 
-    const tdPet = document.createElement("td");
-    tdPet.textContent = petName;
-    tr.appendChild(tdPet);
+  const tdLvl = document.createElement("td");
+  tdLvl.textContent = String(level);
+  tr.appendChild(tdLvl);
 
-    const tdLvl = document.createElement("td");
-    tdLvl.textContent = String(level);
-    tr.appendChild(tdLvl);
+  const tdRarity = document.createElement("td");
+  tdRarity.textContent = String(rarity);
+  tr.appendChild(tdRarity);
 
-    const tdRarity = document.createElement("td");
-    tdRarity.textContent = String(rarity);
-    tr.appendChild(tdRarity);
-
-    tbody.appendChild(tr);
+  tbody.appendChild(tr);
 });
 }
 
