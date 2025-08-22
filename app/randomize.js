@@ -9,7 +9,7 @@ function getRarity() {
     return "The One and Only"; 
 }
 
-function getMutation() {
+function getMutation(odds) {
     const mutations = [
         "Frozen", "Fiery", "Golden", "Shadow", "Crystal", "Toxic", "Glowing", "Radiant",
         "Cursed", "Shocked", "Ancient", "Metallic", "Obsidian", "Lunar", "Solar", "Stormy",
@@ -18,7 +18,7 @@ function getMutation() {
         "Holy", "Shiny"
     ];
     const random = Math.random();
-    if (random < 0.25) {
+    if (random < odds) {
         const rand = Math.floor(Math.random() * mutations.length);
         return mutations[rand];
     }

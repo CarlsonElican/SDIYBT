@@ -294,6 +294,31 @@ async function performLevelUp(username) {
     }
   }
 
+  if (Math.random() < 0.03) {
+    const current = Array.isArray(pet.mutations) ? pet.mutations.slice() : [];
+    if (current.length < 5) {
+      const have = new Set(current.map(m => String(m || "").toLowerCase()));
+      let newMutation = null;
+
+      for (let tries = 0; tries < 12; tries++) {
+        const candidate = randomize.getMutation(1); 
+        if (candidate && !have.has(candidate.toLowerCase())) {
+          newMutation = candidate;
+          break;
+        }
+      }
+
+      if (newMutation) {
+        current.push(newMutation);
+        await pool.query(
+          "UPDATE pets SET mutations = $2 WHERE username = $1",
+          [username, current]
+        );
+        pet.mutations = current; 
+      }
+    }
+  }
+
   const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
   return { ...pet, available_rerolls };
 }
@@ -460,7 +485,7 @@ async function randomizePet(sessionUser) {
 
   const level = 1;
   const rarity = randomize.getRarity();
-  const mutation = randomize.getMutation();
+  const mutation = randomize.getMutation(0.25);
   const health = randomize.getHealth();
   const health_growth = randomize.getHealthGrowth();
   const attack = randomize.getAttack();
