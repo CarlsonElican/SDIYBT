@@ -8,6 +8,28 @@ const port = 3000;
 const hostname = "localhost";
 const randomize = require("./randomize.js");
 
+const fs = require("fs");
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+const multer = require("multer");
+const sharp = require("sharp");
+
+
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const R2_BUCKET = process.env.R2_BUCKET || "sdiybt-pet-game-uploads";
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
+const R2_PUBLIC_BASE = process.env.R2_PUBLIC_BASE;
+
+const r2 = new S3Client({
+  region: "auto",
+  endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: process.env.R2_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET,
+  },
+});
+
 const pool = new pg.Pool({
   connectionString: "postgresql://neondb_owner:npg_mpqW7HL6crvz@ep-cold-base-aep1ue78-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 });
@@ -26,6 +48,8 @@ app.use(express.static("public"));
 app.use(express.json());
 // add any protected links through
 app.use("/protected", express.static(__dirname + "/protected"));
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.post("/signup", async (req, res) => {
   const { username, password } = req.body;
@@ -85,11 +109,73 @@ app.get("/", (req, res) => {
   res.sendFile(__dirname + "/public/welcome.html");
 });
 
-app.get("/me", (req, res) => {
-  if (req.session.username) {
-    res.json({ username: req.session.username });
-  } else {
-    res.status(401).json({ error: "Not logged in" });
+app.get("/me", async (req, res) => {
+  if (!req.session.username) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
+
+  try {
+    const r = await pool.query(
+      "SELECT username, avatar_url FROM users WHERE username = $1",
+      [req.session.username]
+    );
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const user = r.rows[0];
+    res.json({
+      username: user.username,
+      avatar_url: user.avatar_url || "/uploads/catstare.png",
+    });
+  } catch (e) {
+    console.error("GET /me error:", e);
+    res.status(500).json({ error: "Failed to load user" });
+  }
+});
+
+//profile picture upload
+
+const AVATAR_DIR = path.join(__dirname, "uploads", "avatars");
+fs.mkdirSync(AVATAR_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype);
+    cb(ok ? null : new Error("Only JPEG/PNG/WebP images allowed"), ok);
+  },
+})
+
+
+app.post("/upload-avatar", upload.single("avatar"), async (req, res) => {
+  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+  try {
+    const processed = await sharp(req.file.buffer)
+      .resize(256, 256, { fit: "cover", position: "center" })
+      .jpeg({ quality: 80, mozjpeg: true })
+      .toBuffer();
+
+    const key = `avatars/${req.session.username}_${Date.now()}.jpg`;
+
+    await r2.send(new PutObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      Body: processed,
+      ContentType: "image/jpeg",
+    }));
+
+    const publicUrl = `${R2_PUBLIC_BASE}/${key}`;
+
+    await pool.query("UPDATE users SET avatar_url=$2 WHERE username=$1", [req.session.username, publicUrl]);
+
+    res.json({ avatar_url: publicUrl });
+  } catch (err) {
+    console.error("R2 upload failed:", err);
+    res.status(500).json({ error: "Upload failed" });
   }
 });
 
@@ -105,6 +191,34 @@ app.get("/trainer", (req, res) => {
     return res.redirect("/login.html");
   }
   res.sendFile(__dirname + "/protected/trainer.html");
+});
+
+app.get("/leaderboard", (req, res) => {
+  if (!req.session.username) {
+    return res.redirect("/login.html");
+  }
+  res.sendFile(__dirname + "/protected/leaderboard.html");
+});
+
+app.get("/api/leaderboard", async (req, res) => {
+  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+
+  try {
+    const q = await pool.query(
+      `SELECT p.username,
+              p.name,
+              p.level,
+              p.rarity,
+              COALESCE(u.avatar_url, '/uploads/catstare.png') AS avatar_url
+         FROM pets p
+         LEFT JOIN users u ON u.username = p.username
+         ORDER BY p.level DESC, p.name ASC`
+    );
+    res.json(q.rows); 
+  } catch (e) {
+    console.error("leaderboard list error:", e);
+    res.status(500).json({ error: "Failed to fetch leaderboard" });
+  }
 });
 
 async function performLevelUp(username) {
@@ -176,6 +290,31 @@ async function performLevelUp(username) {
         );
         const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [username]);
         pet = refetch.rows[0];
+      }
+    }
+  }
+
+  if (Math.random() < 0.03) {
+    const current = Array.isArray(pet.mutations) ? pet.mutations.slice() : [];
+    if (current.length < 5) {
+      const have = new Set(current.map(m => String(m || "").toLowerCase()));
+      let newMutation = null;
+
+      for (let tries = 0; tries < 12; tries++) {
+        const candidate = randomize.getMutation(1); 
+        if (candidate && !have.has(candidate.toLowerCase())) {
+          newMutation = candidate;
+          break;
+        }
+      }
+
+      if (newMutation) {
+        current.push(newMutation);
+        await pool.query(
+          "UPDATE pets SET mutations = $2 WHERE username = $1",
+          [username, current]
+        );
+        pet.mutations = current; 
       }
     }
   }
@@ -346,7 +485,7 @@ async function randomizePet(sessionUser) {
 
   const level = 1;
   const rarity = randomize.getRarity();
-  const mutation = randomize.getMutation();
+  const mutation = randomize.getMutation(0.25);
   const health = randomize.getHealth();
   const health_growth = randomize.getHealthGrowth();
   const attack = randomize.getAttack();
@@ -710,6 +849,25 @@ app.get("/my-pet", async (req, res) => {
   } catch (err) {
     console.error("Error fetching pet:", err);
     res.status(500).json({ error: "Failed to retrieve pet" });
+  }
+});
+
+app.get("/pet/:username", async (req, res) => {
+  const target = req.params.username;
+  if (!target) return res.status(400).json({ error: "Missing username" });
+
+  try {
+    const { rows } = await pool.query("SELECT * FROM pets WHERE username = $1", [target]);
+    if (rows.length === 0) return res.status(404).json({ error: "No pet found" });
+
+    const pet = rows[0];
+
+    const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+
+    return res.json({ ...pet, available_rerolls });
+  } catch (err) {
+    console.error("Error fetching pet profile:", err);
+    return res.status(500).json({ error: "Failed to retrieve profile" });
   }
 });
 

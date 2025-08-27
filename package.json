@@ -1,9 +1,15 @@
 {
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.872.0",
     "bcrypt": "^6.0.0",
+    "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
-    "pg": "^8.16.3"
+    "mime-types": "^3.0.1",
+    "multer": "^2.0.2",
+    "pg": "^8.16.3",
+    "sharp": "^0.34.3",
+    "uuid": "^11.1.0"
   },
   "scripts": {
     "start": "cd app & node server.js"

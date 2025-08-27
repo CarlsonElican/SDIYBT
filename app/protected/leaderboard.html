@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Leaderboard</title>
+  <link rel="stylesheet" type="text/css" href="/style.css">
+  <style>
+    .table { width: 100%; max-width: 900px; margin: 20px auto; border-collapse: collapse; }
+    .table th, .table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+    .table th { background: #f2f2f2; }
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: none; align-items: center; justify-content: center; z-index: 9999;
+    }
+    .modal-box {
+      background: #fff; padding: 20px; border-radius: 10px; min-width: 340px; max-width: 520px;
+    }
+    .move-chip {
+      border-width: 3px; border-style: solid; padding: 6px 10px; border-radius: 10px;
+      margin-bottom: 6px; list-style: none; display: flex; justify-content: space-between; gap: 8px;
+    }
+    .rarity-weak    { border-color: #9be7a3; }
+    .rarity-average { border-color: #64b5f6; }
+    .rarity-based   { border-color: #ba68c8; }
+    .rarity-awesome { border-color: #ef5350; }
+    .rarity-legendary {
+      border: 3px solid transparent; border-radius: 10px;
+      background:
+        linear-gradient(#fff, #fff) padding-box,
+        linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet, red) border-box;
+      background-size: 100% 100%, 300% 100%;
+      animation: rainbow-move 3s linear infinite;
+    }
+    @keyframes rainbow-move {
+      0% { background-position: 0 0, 0% 0; }
+      100% { background-position: 0 0, 100% 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="navbar-id"></div>
+
+  <h2 style="text-align:center;margin-top:16px;">Leaderboard</h2>
+
+  <div style="max-width:900px;margin:0 auto 10px auto;">
+  </div>
+
+  <table class="table" id="lb-table">
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Pet Name</th>
+        <th>Level</th>
+        <th>Rarity</th>
+        <th>Profile</th>
+      </tr>
+    </thead>
+    <tbody id="lb-body">
+    </tbody>
+  </table>
+
+  <div class="modal-overlay" id="profile-modal">
+    <div class="modal-box">
+      <div id="profile-content"></div>
+      <div style="text-align:right;margin-top:10px;">
+        <button id="profile-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/navbar/navbar.js"></script>
+  <script src="/protected/leaderboard.js"></script>
+</body>
+</html>
