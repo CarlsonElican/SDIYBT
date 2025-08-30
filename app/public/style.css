@@ -188,6 +188,15 @@ nav li {
 .btn:active        { color: #000; font-weight: bold; }
 .big-btn { width: 200px; height: 200px; font-size: 28px; border-radius: 12px; }
 
+#rankup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.1;
+  padding: 0 12px;
+}
+
 .sprite-wrap {
   position: relative;
   display: block;

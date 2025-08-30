@@ -299,22 +299,34 @@ async function performLevelUp(username) {
     if (current.length < 5) {
       const have = new Set(current.map(m => String(m || "").toLowerCase()));
       let newMutation = null;
-
       for (let tries = 0; tries < 12; tries++) {
-        const candidate = randomize.getMutation(1); 
+        const candidate = randomize.getMutation(1);
         if (candidate && !have.has(candidate.toLowerCase())) {
           newMutation = candidate;
           break;
         }
       }
-
       if (newMutation) {
         current.push(newMutation);
         await pool.query(
           "UPDATE pets SET mutations = $2 WHERE username = $1",
           [username, current]
         );
-        pet.mutations = current; 
+        pet.mutations = current;
+      }
+    }
+  }
+
+  if (!pet.rank_up_pending) {
+    const next = nextRarity(pet.rarity);
+    if (next) {
+      const chance = RANK_UP_CHANCE[pet.rarity] || 0;
+      if (Math.random() < chance) {
+        const upd = await pool.query(
+          "UPDATE pets SET rank_up_pending = TRUE, rank_up_target = $2 WHERE username = $1 RETURNING *",
+          [username, next]
+        );
+        pet = upd.rows[0];
       }
     }
   }
@@ -333,6 +345,20 @@ const PET_TO_MOVE_DIST = {
   "The One and Only": { weak:0,  average:0,  based:0,  awesome:0,   legendary:100 }
 };
 
+const RANK_ORDER = ["Common","Uncommon","Rare","Epic","Mythical","Divine","The One and Only"];
+const RANK_UP_CHANCE = {
+  "Common": 0.6,
+  "Uncommon": 0.05,
+  "Rare": 0.04,
+  "Epic": 0.03,
+  "Mythical": 0.02,
+  "Divine": 0.01,
+  "The One and Only": 0
+};
+function nextRarity(curr) {
+  const i = RANK_ORDER.indexOf(curr);
+  return (i >= 0 && i < RANK_ORDER.length - 1) ? RANK_ORDER[i + 1] : null;
+}
 
 function inWeak(power)       { return power >= 1   && power <= 49; }
 function inAverage(power)    { return power >= 50  && power <= 80; }
@@ -730,6 +756,35 @@ app.post("/levelup", async (req, res) => {
   } catch (e) {
     console.error("Error level-up:", e);
     return res.status(500).json({ error: "Failed to level up" });
+  }
+});
+
+app.post("/rank-up", async (req, res) => {
+  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+
+  try {
+    const upd = await pool.query(
+      `UPDATE pets
+         SET rarity = rank_up_target,
+             rank_up_pending = FALSE,
+             rank_up_target = NULL
+       WHERE username = $1
+         AND rank_up_pending = TRUE
+         AND rank_up_target IS NOT NULL
+       RETURNING *`,
+      [req.session.username]
+    );
+
+    if (upd.rows.length === 0) {
+      return res.status(400).json({ error: "No rank-up available" });
+    }
+
+    const pet = upd.rows[0];
+    const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+    return res.json({ ...pet, available_rerolls });
+  } catch (e) {
+    console.error("Rank-up error:", e);
+    return res.status(500).json({ error: "Rank up failed" });
   }
 });
 

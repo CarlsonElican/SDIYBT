@@ -121,6 +121,44 @@ function buildSpriteWithAuras(spriteUrl, mutations = []) {
   return wrapper;
 }
 
+function ensureRankUpButton(data) {
+  const host = document.querySelector(".trainer-actions-inner");
+  if (!host) return;
+
+  let btn = document.getElementById("rankup");
+  const shouldShow = !!(data.rank_up_pending && data.rank_up_target);
+
+  if (!shouldShow) {
+    if (btn) btn.style.display = "none";
+    return;
+  }
+
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.id = "rankup";
+    btn.className = "btn big-btn";
+    btn.style.marginBottom = "14px";
+    btn.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/rank-up", { method: "POST", credentials: "include" });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(json.error || "Rank up failed");
+          return;
+        }
+        displayPet(json);
+      } catch (e) {
+        console.error("Rank up failed:", e);
+        alert("Rank up failed");
+      }
+    });
+    host.prepend(btn);
+  }
+
+  btn.textContent = `Rank Up (${data.rank_up_target})`;
+  btn.style.display = "block";
+}
+
 function displayPet(data) {
   const container = document.getElementById("pet-container");
   container.innerHTML = '';
@@ -254,6 +292,7 @@ function displayPet(data) {
 
   petBox.appendChild(moveList);
   container.appendChild(petBox);
+  ensureRankUpButton(data);
 
   const claimBtn = document.getElementById("claimxp");
   if (claimBtn) {
