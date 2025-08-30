@@ -476,6 +476,31 @@ async function generateMovesForPet(petRarity) {
   return out;
 }
 
+function regenPassiveExpFields(pet) {
+  const max = Number.isFinite(pet.passive_exp_max) ? pet.passive_exp_max : 2500;
+  let pexp = Number.isFinite(pet.passive_exp) ? pet.passive_exp : 0;
+
+  const last = pet.passive_exp_updated_at ? new Date(pet.passive_exp_updated_at) : null;
+  const now = new Date();
+
+  if (!last) {
+    return { passive_exp: pexp, passive_exp_max: max, passive_exp_updated_at: now, changed: true };
+  }
+
+  const ticks = Math.floor((now - last) / 30000);
+  if (ticks <= 0) {
+    return { passive_exp: pexp, passive_exp_max: max, passive_exp_updated_at: now, changed: false };
+  }
+
+  const gained = Math.min(ticks, Math.max(0, max - pexp));
+  return {
+    passive_exp: pexp + gained,
+    passive_exp_max: max,
+    passive_exp_updated_at: now,
+    changed: gained > 0
+  };
+}
+
 async function randomizePet(sessionUser) {
   const randomId = Math.floor(Math.random() * 898) + 1;
   const pokeRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${randomId}`);
@@ -623,6 +648,77 @@ app.post("/gain-xp", async (req, res) => {
   } catch (e) {
     console.error("XP gain error:", e);
     return res.status(500).json({ error: "Failed to gain XP" });
+  }
+});
+
+app.post("/train", async (req, res) => {
+  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+
+  try {
+    const r = await pool.query("SELECT * FROM pets WHERE username=$1", [req.session.username]);
+    if (!r.rows.length) return res.status(404).json({ error: "No pet found" });
+    let pet = r.rows[0];
+
+    if ((pet.level ?? 1) >= 100) {
+      if ((pet.xp ?? 0) !== 0 || (pet.xp_cap ?? 0) !== 0) {
+        await pool.query("UPDATE pets SET xp=0, xp_cap=0 WHERE username=$1", [req.session.username]);
+        const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [req.session.username]);
+        pet = refetch.rows[0];
+      }
+      const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+      return res.json({ ...pet, xp: 0, xp_cap: 0, available_rerolls });
+    }
+
+    const regen = regenPassiveExpFields(pet);
+    let pexp = regen.passive_exp;
+    const pmax = regen.passive_exp_max;
+    let pupdated = regen.passive_exp_updated_at;
+
+    if (regen.changed) {
+      const upd = await pool.query(
+        `UPDATE pets SET passive_exp=$2, passive_exp_max=$3, passive_exp_updated_at=$4 WHERE username=$1 RETURNING *`,
+        [req.session.username, pexp, pmax, pupdated]
+      );
+      pet = upd.rows[0];
+      pexp = pet.passive_exp;
+    }
+
+    if (pexp <= 0) {
+      return res.status(400).json({ error: "No Passive EXP to claim", passive_exp: pexp, passive_exp_max: pmax });
+    }
+
+    let xp = pet.xp ?? 0;
+    let cap = pet.xp_cap ?? 10;
+
+    const room = Math.max(0, cap - xp);
+    const grant = Math.min(pexp, room);
+
+    xp += grant;
+    pexp -= grant;
+    pupdated = new Date();
+
+    if (xp >= cap) {
+      await pool.query(
+        "UPDATE pets SET xp=$2, xp_cap=$3, passive_exp=$4, passive_exp_updated_at=$5 WHERE username=$1",
+        [req.session.username, 0, Math.ceil(cap * 1.06), pexp, pupdated]
+      );
+      const leveled = await performLevelUp(req.session.username);
+      leveled.passive_exp = pexp;
+      leveled.passive_exp_max = pmax;
+      leveled.passive_exp_updated_at = pupdated;
+      return res.json(leveled);
+    } else {
+      const upd = await pool.query(
+        "UPDATE pets SET xp=$2, passive_exp=$3, passive_exp_updated_at=$4 WHERE username=$1 RETURNING *",
+        [req.session.username, xp, pexp, pupdated]
+      );
+      const pet2 = upd.rows[0];
+      const available_rerolls = getAvailableRerolls(pet2.level, pet2.rerolls_spent);
+      return res.json({ ...pet2, available_rerolls });
+    }
+  } catch (e) {
+    console.error("Train error:", e);
+    return res.status(500).json({ error: "Training failed" });
   }
 });
 
@@ -839,13 +935,33 @@ app.get("/my-pet", async (req, res) => {
     }
 
     const petRow = result.rows[0];
+
+    const regen = regenPassiveExpFields(petRow);
+    if (regen.changed) {
+      const upd = await pool.query(
+        `UPDATE pets
+           SET passive_exp=$2,
+               passive_exp_max=$3,
+               passive_exp_updated_at=$4
+         WHERE username=$1
+         RETURNING *`,
+        [req.session.username, regen.passive_exp, regen.passive_exp_max, regen.passive_exp_updated_at]
+      );
+      petRow.passive_exp = upd.rows[0].passive_exp;
+      petRow.passive_exp_max = upd.rows[0].passive_exp_max;
+      petRow.passive_exp_updated_at = upd.rows[0].passive_exp_updated_at;
+    } else {
+      petRow.passive_exp = regen.passive_exp;
+      petRow.passive_exp_max = regen.passive_exp_max;
+      petRow.passive_exp_updated_at = regen.passive_exp_updated_at;
+    }
+
     const available_rerolls = getAvailableRerolls(petRow.level, petRow.rerolls_spent);
 
     console.log("LVL:", petRow.level, "spent:", petRow.rerolls_spent, "avail:", available_rerolls);
-
     console.log("Pet retrieved for:", req.session.username);
-    res.json({ ...petRow, available_rerolls });
 
+    res.json({ ...petRow, available_rerolls });
   } catch (err) {
     console.error("Error fetching pet:", err);
     res.status(500).json({ error: "Failed to retrieve pet" });
