@@ -34,7 +34,9 @@ const pool = new pg.Pool({
   connectionString: "postgresql://neondb_owner:npg_mpqW7HL6crvz@ep-cold-base-aep1ue78-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 });
 
-const GENERATE_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
+const GENERATE_COOLDOWN_MS = 2 * 60 * 1000; // 2 
+const MAX_LEVEL = 1000;
+
 
 
 app.use(session({
@@ -46,7 +48,6 @@ app.use(session({
 
 app.use(express.static("public"));
 app.use(express.json());
-// add any protected links through
 app.use("/protected", express.static(__dirname + "/protected"));
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -133,8 +134,6 @@ app.get("/me", async (req, res) => {
     res.status(500).json({ error: "Failed to load user" });
   }
 });
-
-//profile picture upload
 
 const AVATAR_DIR = path.join(__dirname, "uploads", "avatars");
 fs.mkdirSync(AVATAR_DIR, { recursive: true });
@@ -226,19 +225,19 @@ async function performLevelUp(username) {
     `
     UPDATE pets
     SET
-      level   = LEAST(COALESCE(level, 1) + 1, 100),
-      health  = COALESCE(health, 0)  + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(health_growth, 0)  ELSE 0 END,
-      attack  = COALESCE(attack, 0)  + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(attack_growth, 0)  ELSE 0 END,
-      defense = COALESCE(defense, 0) + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(defense_growth, 0) ELSE 0 END
+      level   = LEAST(COALESCE(level, 1) + 1, $2),
+      health  = COALESCE(health, 0)  + CASE WHEN COALESCE(level, 1) < $2 THEN COALESCE(health_growth, 0)  ELSE 0 END,
+      attack  = COALESCE(attack, 0)  + CASE WHEN COALESCE(level, 1) < $2 THEN COALESCE(attack_growth, 0)  ELSE 0 END,
+      defense = COALESCE(defense, 0) + CASE WHEN COALESCE(level, 1) < $2 THEN COALESCE(defense_growth, 0) ELSE 0 END
     WHERE username = $1
     RETURNING *`,
-    [username]
+    [username, MAX_LEVEL]
   );
   if (up.rows.length === 0) throw new Error("No pet found for level up");
 
   let pet = up.rows[0];
 
-  if ((pet.level ?? 1) >= 100) {
+  if ((pet.level ?? 1) >= MAX_LEVEL) {
     await pool.query("UPDATE pets SET xp = 0, xp_cap = 0 WHERE username = $1", [username]);
     const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [username]);
     pet = refetch.rows[0];
@@ -348,12 +347,12 @@ const PET_TO_MOVE_DIST = {
 const RANK_ORDER = ["Common","Uncommon","Rare","Epic","Mythical","Divine","The One and Only"];
 const RANK_UP_CHANCE = {
   
-  "Common": 0.04,
-  "Uncommon": 0.03,
-  "Rare": 0.02,
-  "Epic": 0.01,
-  "Mythical": 0.005,
-  "Divine": 0.001,
+  "Common": 0.004,
+  "Uncommon": 0.003,
+  "Rare": 0.002,
+  "Epic": 0.001,
+  "Mythical": 0.0005,
+  "Divine": 0.0001,
   "The One and Only": 0
 };
 function nextRarity(curr) {
@@ -636,7 +635,7 @@ app.post("/gain-xp", async (req, res) => {
 
     let pet = petRes.rows[0];
 
-    if ((pet.level ?? 1) >= 100) {
+    if ((pet.level ?? 1) >= MAX_LEVEL) {
       if ((pet.xp ?? 0) !== 0 || (pet.xp_cap ?? 0) !== 0) {
         await pool.query(
           "UPDATE pets SET xp = 0, xp_cap = 0 WHERE username = $1",
@@ -654,7 +653,7 @@ app.post("/gain-xp", async (req, res) => {
 
     if (newXp >= newCap) {
       newXp = 0;
-      newCap = Math.ceil(newCap * 1.06);
+      newCap = newCap += 10
 
       await pool.query(
         "UPDATE pets SET xp = $2, xp_cap = $3 WHERE username = $1",
@@ -686,7 +685,7 @@ app.post("/train", async (req, res) => {
     if (!r.rows.length) return res.status(404).json({ error: "No pet found" });
     let pet = r.rows[0];
 
-    if ((pet.level ?? 1) >= 100) {
+    if ((pet.level ?? 1) >= MAX_LEVEL) {
       if ((pet.xp ?? 0) !== 0 || (pet.xp_cap ?? 0) !== 0) {
         await pool.query("UPDATE pets SET xp=0, xp_cap=0 WHERE username=$1", [req.session.username]);
         const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [req.session.username]);
@@ -727,7 +726,7 @@ app.post("/train", async (req, res) => {
     if (xp >= cap) {
       await pool.query(
         "UPDATE pets SET xp=$2, xp_cap=$3, passive_exp=$4, passive_exp_updated_at=$5 WHERE username=$1",
-        [req.session.username, 0, Math.ceil(cap * 1.06), pexp, pupdated]
+        [req.session.username, 0, cap += 10, pexp, pupdated]
       );
       const leveled = await performLevelUp(req.session.username);
       leveled.passive_exp = pexp;
