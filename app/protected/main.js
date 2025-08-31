@@ -61,12 +61,12 @@ function startCooldown(ms) {
   function tick() {
     const m = Math.floor(remaining / 60);
     const s = remaining % 60;
-    generateBtn.textContent = `Generate (wait ${m}:${String(s).padStart(2, "0")})`;
+    generateBtn.textContent = `Randomize (wait ${m}:${String(s).padStart(2, "0")})`;
     if (remaining <= 0) {
       clearInterval(cooldownTimer);
       cooldownTimer = null;
       generateBtn.disabled = false;
-      generateBtn.textContent = "Generate Pet";
+      generateBtn.textContent = "Randomize a Pet";
       generateBtn.classList.remove("hidden"); 
       return;
     }
@@ -87,7 +87,7 @@ function checkGenerateCooldownOnLoad() {
         startCooldown(ms);
       } else if (generateBtn) {
         generateBtn.disabled = false;
-        generateBtn.textContent = "Generate Pet";
+        generateBtn.textContent = "Randomize a Pet";
         generateBtn.classList.remove("hidden");
       }
     })
