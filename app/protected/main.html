@@ -1,51 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<meta charset="utf-8">
-	<title>Pet Game (Name TBD)</title>
-	<link rel="stylesheet" type="text/css" href="style.css">
+  <meta charset="utf-8">
+  <title>Pet Game (Name TBD)</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/navbar/navbar.css">
 </head>
 <body>
   <div id="navbar-id"></div>
 
-  <div id="pet-container" style="display: flex; justify-content: center; margin-top: 20px;"></div>
+  <div id="pet-container" class="pet-container"></div>
 
-  <div style="text-align: center; margin-top: 20px;">
-        <button id="generate">Generate Pet</button>
-        <button id="savepet">Save Pet</button>
+  <div class="actions">
+    <button id="generate" class="btn-cta">Generate Pet</button>
+    <button id="savepet" class="btn">Save Pet</button>
   </div>
-  <style>
-    .move-chip {
-      border-width: 3px;
-      border-style: solid;
-      padding: 6px 10px;
-      border-radius: 10px;
-      margin-bottom: 6px;
-      list-style: none;
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .rarity-weak      { border-color: #9be7a3; }
-    .rarity-average   { border-color: #64b5f6; } 
-    .rarity-based     { border-color: #ba68c8; } 
-    .rarity-awesome   { border-color: #ef5350; } 
 
-    .rarity-legendary {
-      border: 3px solid transparent;
-      border-radius: 10px;
-      background:
-        linear-gradient(#fff, #fff) padding-box,
-        linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet, red) border-box;
-      background-size: 100% 100%, 300% 100%;
-      animation: rainbow-move 3s linear infinite;
-    }
-    @keyframes rainbow-move {
-      0%   { background-position: 0 0,   0% 0; }
-      100% { background-position: 0 0, 100% 0; }
-  }
-</style>
-
+  <script src="/protected/petdisplay.js"></script>
   <script src="navbar/navbar.js"></script>
   <script src="/protected/main.js"></script>
 </body>

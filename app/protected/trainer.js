@@ -49,6 +49,27 @@ const MUTATION_META = {
   Shiny:      { emoji: "🌟", aura: "aura-sparkle", color: "#ffe06b" },
 };
 
+const TYPE_EMOJI = {
+    normal:   "⚪️",
+    fire:     "🔥",
+    water:    "💧",
+    grass:    "🌿",
+    electric: "⚡",
+    ice:      "❄️",
+    fighting: "🥊",
+    poison:   "☠️",
+    ground:   "⛰️",
+    flying:   "🕊️",
+    psychic:  "🔮",
+    bug:      "🐛",
+    rock:     "🪨",
+    ghost:    "👻",
+    dragon:   "🐉",
+    steel:    "⚙️",
+    dark:     "🌑",
+    fairy:    "✨"
+  };
+
 function renderMutationsChips(muts = []) {
   const wrap = document.createElement("div");
   wrap.className = "mutations-wrap";
@@ -136,7 +157,7 @@ function ensureRankUpButton(data) {
   if (!btn) {
     btn = document.createElement("button");
     btn.id = "rankup";
-    btn.className = "btn big-btn";
+    btn.className = "btn";
     btn.style.marginBottom = "14px";
     btn.addEventListener("click", async () => {
       try {
@@ -155,151 +176,63 @@ function ensureRankUpButton(data) {
     host.prepend(btn);
   }
 
-  btn.textContent = `Rank Up (${data.rank_up_target})`;
+  btn.textContent = `RANK UP (${data.rank_up_target})`;
   btn.style.display = "block";
 }
 
 function displayPet(data) {
   const container = document.getElementById("pet-container");
-  container.innerHTML = '';
 
-  const petBox = document.createElement("div");
-  petBox.style.border = "2px solid black";
-  petBox.style.padding = "20px";
-  petBox.style.width = "420px";
-  petBox.style.backgroundColor = "#f9f9f9";
-  petBox.style.borderRadius = "10px";
-  petBox.style.textAlign = "left";
-
-  const title = document.createElement("h2");
-  title.textContent = data.name;
-  title.style.textAlign = "center";
-
-  const img = document.createElement("img");
-  img.src = data.sprite;
-  img.alt = "Pet sprite";
-  img.style.display = "block";
-  img.style.margin = "auto";
-
-  const wrap = document.createElement("div");
-  wrap.className = "sprite-wrap";
-
-  const muts = Array.isArray(data.mutations) ? data.mutations : [];
-  muts.forEach((name) => {
-    const meta = MUTATION_META[name];
-    if (!meta) return;
-    const aura = document.createElement("div");
-    aura.className = "aura-base " + meta.aura;
-    aura.style.setProperty("--aura-color-1", meta.color);
-    aura.style.setProperty("--aura-color-2", meta.color);
-    aura.style.setProperty("--aura-color-3", meta.color);
-    wrap.appendChild(aura);
-  });
-
-  wrap.appendChild(img);
-
-  petBox.appendChild(title);
-  petBox.appendChild(wrap);
-
-  const mutHeader = document.createElement("p");
-  mutHeader.innerHTML = "<strong>Mutations:</strong>";
-  petBox.appendChild(mutHeader);
-  petBox.appendChild(renderMutationsChips(data.mutations || []));
-
-  const lines = [
-    ["Rarity", data.rarity],
-    ["Type", data.type],
-    ["Speed", data.speed],
-    ["Level", data.level],
-    ["XP", `${data.xp ?? 0} / ${data.xp_cap ?? 10}`],
-    ["Health", String(data.health) + " (+" + data.health_growth + "/level)"],
-    ["Attack", String(data.attack) + " (+" + data.attack_growth + "/level)"],
-    ["Defense", String(data.defense) + " (+" + data.defense_growth + "/level)"]
-  ];
-
-  for (var i = 0; i < lines.length; i++) {
-    var p = document.createElement("p");
-    p.innerHTML = "<strong>" + lines[i][0] + ":</strong> " + lines[i][1];
-    petBox.appendChild(p);
-  }
-
-  const moveHeader = document.createElement("div");
-  moveHeader.style.display = "flex";
-  moveHeader.style.justifyContent = "space-between";
-  moveHeader.style.alignItems = "center";
-  const mhLeft = document.createElement("p");
-  mhLeft.innerHTML = "<strong>Moves:</strong>";
-  const mhRight = document.createElement("p");
-  const rerollsAvail = Number(data.available_rerolls || 0);
-  mhRight.textContent = "Rerolls available: " + rerollsAvail;
-  moveHeader.appendChild(mhLeft);
-  moveHeader.appendChild(mhRight);
-  petBox.appendChild(moveHeader);
-
-  const moveList = document.createElement("ul");
-  moveList.style.paddingLeft = "18px";
-
-  for (let s = 1; s <= 4; s++) {
-    const name = data["move" + s + "name"];
-    if (!name) continue;
-    const type = data["move" + s + "type"];
-    const dmg  = data["move" + s + "damage"];
-    if (typeof dmg !== "number" || dmg <= 0) continue;
-
-    let rar = data["move" + s + "rarity"] || inferMoveRarity(dmg);
-    if (!rar) rar = inferMoveRarity(dmg);
-
-    const li = document.createElement("li");
-    li.classList.add("move-chip");
-    if (rar === "weak") li.classList.add("rarity-weak");
-    else if (rar === "average") li.classList.add("rarity-average");
-    else if (rar === "based") li.classList.add("rarity-based");
-    else if (rar === "awesome") li.classList.add("rarity-awesome");
-    else if (rar === "legendary") li.classList.add("rarity-legendary");
-
-    const label = document.createElement("span");
-    label.textContent = name + " (" + type + ") - " + dmg + " dmg";
-    li.appendChild(label);
-
-    if (rerollsAvail > 0) {
-      const btn = document.createElement("button");
-      btn.textContent = "Reroll";
-      btn.style.marginLeft = "8px";
-      btn.addEventListener("click", () => {
+  PetDisplay.render(
+    container,
+    data,
+    {
+      showTitle: true,
+      showMutations: true,
+      showBars: { health: true, xp: true },
+      showGridStats: true,
+      showMoves: true,
+      showReroll: true,
+      availableRerolls: Number(data.available_rerolls || 0),
+      showRerollCount: true,
+      showRankUp: true
+    },
+    {
+      onReroll: (slot) => {
         fetch("/reroll-move", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ slot: s })
+          body: JSON.stringify({ slot })
         })
-          .then(res => {
-            if (!res.ok) return res.json().then(e => { throw new Error(e.error || "Reroll failed"); });
-            return res.json();
-          })
-          .then(updated => {
-            displayPet(updated);
-          })
-          .catch(err => {
-            alert(err.message || "Reroll failed");
-            console.error(err);
-          });
-      });
-      li.appendChild(btn);
+          .then(res => res.ok ? res.json() : res.json().then(e => Promise.reject(e)))
+          .then(updated => displayPet(updated))
+          .catch(err => alert(err.error || "Reroll failed"));
+      },
+      onRankUp: () => {
+        fetch("/rank-up", { method: "POST", credentials: "include" })
+          .then(res => res.ok ? res.json() : res.json().then(e => Promise.reject(e)))
+          .then(updated => displayPet(updated))
+          .catch(err => alert(err.error || "Rank up failed"));
+      }
     }
+  );
 
-    moveList.appendChild(li);
-  }
-
-  petBox.appendChild(moveList);
-  container.appendChild(petBox);
-  ensureRankUpButton(data);
+  const pexp = Number(data.passive_exp ?? 0);
+  const cap = 2500;
+  const percent = Math.max(0, Math.min(100, Math.round((pexp / cap) * 100)));
 
   const claimBtn = document.getElementById("claimxp");
-  if (claimBtn) {
-    const pexp = Number(data.passive_exp ?? 0);
-    claimBtn.innerHTML = `Claim Passive XP<br><small>${pexp}/2500</small>`;
-  }
+  if (claimBtn) claimBtn.textContent = "Claim Passive XP";
+
+  const fill = document.getElementById("claimxp-fill");
+  if (fill) fill.style.width = percent + "%";
+
+  const label = document.getElementById("claimxp-label");
+  if (label) label.textContent = `${pexp}/${cap}`;
 }
+
+
 
 function loadPet() {
   fetch("/my-pet", { credentials: "include" })
@@ -376,6 +309,27 @@ document.getElementById("claimxp")?.addEventListener("click", async () => {
     console.error("Claim failed:", e);
     alert("Claim failed");
   }
+});
+
+
+
+// REMOVE THIS WHEN FINALIZING
+document.getElementById("levelup")?.addEventListener("click", function() {
+  fetch("/levelup", { method: "POST", credentials: "include" })
+    .then(function (res) {
+      if (res.status === 404) {
+        alert("No saved pet. Generate and Save first.");
+        return null;
+      }
+      if (!res.ok) throw new Error("Failed to level up");
+      return res.json();
+    })
+    .then(function (row) {
+      if (row) displayPet(row);
+    })
+    .catch(function (err) {
+      console.error("Level up failed:", err);
+    });
 });
 
 function initializeAvatar() {

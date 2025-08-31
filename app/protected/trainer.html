@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>Trainer Page</title>
   <link rel="stylesheet" type="text/css" href="/style.css">
+  <link rel="stylesheet" href="/navbar/navbar.css">
 </head>
 <body>
   <div id="navbar-id"></div>
@@ -17,20 +18,36 @@
         <input id="avatar-file" type="file" name="avatar" accept="image/*">
         <button type="submit" style="margin-top:8px;">Upload</button>
       </form>
-      <div class="upload-hint">Max ~1 MB, square image looks best (e.g. 256×256).</div>
+      <div class="upload-hint"> Max ~1 MB</div>
     </aside>
 
-    <div id="pet-container" class="pet-box"></div>
+    <div id="pet-container" class="pet-container"></div>
 
     <aside class="trainer-actions">
       <div class="trainer-actions-inner">
-        <button id="claimxp" class="btn big-btn">Claim XP</button>
+        <div id="claimxp-wrap" class="claim-wrap">
+          <button id="claimxp" class="btn">Claim Passive XP</button>
+          <div class="progress passive" id="claimxp-bar">
+            <div class="progress-fill" id="claimxp-fill"></div>
+            <div class="progress-label" id="claimxp-label">0/2500</div>
+          </div>
+        </div>
+
         <div style="height:14px;"></div>
-        <button id="xpgain" class="btn big-btn">+1 XP</button>
+
+        <button id="xpgain" class="candy-btn" aria-label="+1 XP">
+          <img src="/uploads/rarecandy.png" alt="+1 XP">
+          <span>+1 XP</span>
+        </button>
+
+        <button id="levelup" type="button" class="btn">Level Up (Test)</button>
       </div>
     </aside>
+
+
   </div>
 
+  <script src="/protected/petdisplay.js"></script>
   <script src="navbar/navbar.js"></script>
   <script src="/protected/trainer.js"></script>
 </body>

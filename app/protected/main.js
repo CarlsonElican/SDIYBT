@@ -1,87 +1,61 @@
 let currentPet = null;
-let GENERATE_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
+let GENERATE_COOLDOWN_MS = 2 * 60 * 1000;
 
-var generateBtn = document.getElementById("generate");
-var saveBtn = document.getElementById("savepet");
+const generateBtn = document.getElementById("generate");
+const saveBtn = document.getElementById("savepet");
 
-var messageDiv = document.createElement("div");
-messageDiv.style.textAlign = "center";
-messageDiv.style.marginTop = "10px";
+const messageDiv = document.createElement("div");
+messageDiv.id = "message";
 document.body.appendChild(messageDiv);
 
-saveBtn.disabled = true;
+saveBtn.classList.add("hidden"); 
 let cooldownTimer = null;
 
-var modalOverlay = document.createElement("div");
-modalOverlay.style.position = "fixed";
-modalOverlay.style.top = "0";
-modalOverlay.style.left = "0";
-modalOverlay.style.width = "100%";
-modalOverlay.style.height = "100%";
-modalOverlay.style.background = "rgba(0,0,0,0.5)";
-modalOverlay.style.display = "none";
-modalOverlay.style.justifyContent = "center";
-modalOverlay.style.alignItems = "center";
+const modalOverlay = document.createElement("div");
+modalOverlay.className = "modal-overlay";
 
-var modalBox = document.createElement("div");
-modalBox.style.background = "#fff";
-modalBox.style.padding = "20px";
-modalBox.style.borderRadius = "8px";
-modalBox.style.minWidth = "300px";
-modalBox.style.textAlign = "center";
+const modalBox = document.createElement("div");
+modalBox.className = "modal-box";
 
-var modalTitle = document.createElement("h3");
+const modalTitle = document.createElement("h3");
+modalTitle.className = "modal-title";
 modalTitle.textContent = "Enter a name for your pet:";
 
-var nameInput = document.createElement("input");
+const nameInput = document.createElement("input");
 nameInput.type = "text";
-nameInput.style.width = "90%";
-nameInput.style.margin = "10px 0";
+nameInput.className = "input";
 
-var modalButtons = document.createElement("div");
+const modalButtons = document.createElement("div");
+modalButtons.className = "modal-actions";
 
-var modalSaveBtn = document.createElement("button");
+const modalSaveBtn = document.createElement("button");
 modalSaveBtn.textContent = "Save";
+modalSaveBtn.className = "modal-btn";
 
-var modalCancelBtn = document.createElement("button");
+const modalCancelBtn = document.createElement("button");
 modalCancelBtn.textContent = "Cancel";
-modalCancelBtn.style.marginLeft = "10px";
+modalCancelBtn.className = "modal-btn modal-btn-secondary";
 
-modalButtons.appendChild(modalSaveBtn);
 modalButtons.appendChild(modalCancelBtn);
-
+modalButtons.appendChild(modalSaveBtn);
 modalBox.appendChild(modalTitle);
 modalBox.appendChild(nameInput);
 modalBox.appendChild(modalButtons);
 modalOverlay.appendChild(modalBox);
 document.body.appendChild(modalOverlay);
 
-function joinOrNone(arr) {
-  if (Array.isArray(arr) && arr.length > 0) return arr.join(", ");
-  return "None";
+function openNameModal() {
+  modalOverlay.classList.add("is-open");
+  nameInput.value = "";
+  nameInput.focus();
 }
-
-function inferMoveRarity(name, dmg) {
-  var ln = typeof name === "string" ? name.toLowerCase() : "";
-  var legendHints = [
-    "hyper beam","explosion","roar of time","hydro cannon","v-create","eternabeam",
-    "menacing moonraze","light that burns the sky","let's snuggle forever","pulverizing pancake",
-    "self-destruct","catastropika","stoked sparksurfer","oceanic operetta","g-max fireball",
-    "g-max hydrosnipe","clangorous soulblaze","searing sunraze smash","malicious moonsault",
-    "soul-stealing 7-star strike","sinister arrow raid","splintered stormshards"
-  ];
-  for (var i = 0; i < legendHints.length; i++) {
-    if (ln.indexOf(legendHints[i]) >= 0) return "legendary";
-  }
-  if (dmg >= 1 && dmg <= 49) return "weak";
-  if (dmg >= 50 && dmg <= 80) return "average";
-  if (dmg >= 81 && dmg <= 100) return "based";
-  return "awesome";
+function closeNameModal() {
+  modalOverlay.classList.remove("is-open");
 }
 
 function startCooldown(ms) {
   if (!generateBtn) return;
-  let remaining = Math.max(0, Math.floor(ms / 1000)); 
+  let remaining = Math.max(0, Math.floor(ms / 1000));
   generateBtn.disabled = true;
 
   function tick() {
@@ -93,6 +67,7 @@ function startCooldown(ms) {
       cooldownTimer = null;
       generateBtn.disabled = false;
       generateBtn.textContent = "Generate Pet";
+      generateBtn.classList.remove("hidden"); 
       return;
     }
     remaining -= 1;
@@ -104,111 +79,53 @@ function startCooldown(ms) {
 
 function checkGenerateCooldownOnLoad() {
   fetch("/generate-cooldown", { credentials: "include" })
-    .then(function (res) {
-      if (!res.ok) throw new Error("status check failed");
-      return res.json();
-    })
-    .then(function (j) {
-      var ms = Number(j.remaining_ms) || 0;
+    .then(res => { if (!res.ok) throw new Error("status check failed"); return res.json(); })
+    .then(j => {
+      const ms = Number(j.remaining_ms) || 0;
       if (ms > 0) {
         messageDiv.textContent = "You must wait before generating again.";
         startCooldown(ms);
-      } else {
-        if (generateBtn) {
-          generateBtn.disabled = false;
-          generateBtn.textContent = "Generate Pet";
-        }
+      } else if (generateBtn) {
+        generateBtn.disabled = false;
+        generateBtn.textContent = "Generate Pet";
+        generateBtn.classList.remove("hidden");
       }
     })
-    .catch(function () {
-    });
+    .catch(() => {});
 }
 
 function displayPet(data) {
   currentPet = data;
+  saveBtn.classList.remove("hidden");  
   saveBtn.disabled = false;
 
-  var container = document.getElementById("pet-container");
-  container.innerHTML = "";
-
-  var petBox = document.createElement("div");
-  petBox.style.border = "2px solid black";
-  petBox.style.padding = "20px";
-  petBox.style.width = "380px";
-  petBox.style.backgroundColor = "#f9f9f9";
-  petBox.style.borderRadius = "10px";
-  petBox.style.textAlign = "left";
-
-  var title = document.createElement("h2");
-  title.textContent = data.name;
-  title.style.textAlign = "center";
-
-  var img = document.createElement("img");
-  img.src = data.sprite;
-  img.alt = "Pet sprite";
-  img.style.display = "block";
-  img.style.margin = "auto";
-
-  petBox.appendChild(img);
-
-  var lines = [
-    ["Rarity", data.rarity],
-    ["Type", data.type],
-    ["Speed", data.speed],
-    ["Mutations", joinOrNone(data.mutations)],
-    ["Level", data.level],
-    ["Health", String(data.health) + " (+" + data.health_growth + "/level)"],
-    ["Attack", String(data.attack) + " (+" + data.attack_growth + "/level)"],
-    ["Defense", String(data.defense) + " (+" + data.defense_growth + "/level)"]
-  ];
-
-  for (var i = 0; i < lines.length; i++) {
-    var p = document.createElement("p");
-    p.innerHTML = "<strong>" + lines[i][0] + ":</strong> " + lines[i][1];
-    petBox.appendChild(p);
-  }
-
-  var moveHeader = document.createElement("p");
-  moveHeader.innerHTML = "<strong>Moves:</strong>";
-  petBox.appendChild(moveHeader);
-
-  var moveList = document.createElement("ul");
-  moveList.style.paddingLeft = "18px";
-
-  for (var s = 1; s <= 4; s++) {
-    var name = data["move" + s + "name"];
-    if (!name) continue;
-    var type = data["move" + s + "type"];
-    var dmg = data["move" + s + "damage"];
-    var rar = data["move" + s + "rarity"] || inferMoveRarity(name, dmg);
-    if (!rar) rar = inferMoveRarity(name, dmg);
-
-    var li = document.createElement("li");
-    li.classList.add("move-chip");
-    if (rar === "weak") li.classList.add("rarity-weak");
-    else if (rar === "average") li.classList.add("rarity-average");
-    else if (rar === "based") li.classList.add("rarity-based");
-    else if (rar === "awesome") li.classList.add("rarity-awesome");
-    else if (rar === "legendary") li.classList.add("rarity-legendary");
-
-    li.textContent = name + " (" + type + ") - " + dmg + " dmg";
-    moveList.appendChild(li);
-  }
-
-  petBox.appendChild(moveList);
-  container.appendChild(petBox);
+  const container = document.getElementById("pet-container");
+  PetDisplay.render(
+    container,
+    data,
+    {
+      showTitle: false,
+      showMutations: true,
+      showBars: { health: true, xp: true },
+      showGridStats: true,
+      showMoves: true,
+      showReroll: false,
+      showRerollCount: false,
+      showRankUp: false
+    }
+  );
 }
 
 if (generateBtn) {
-  generateBtn.addEventListener("click", function () {
+  generateBtn.addEventListener("click", () => {
     messageDiv.textContent = "";
-    fetch("/generate-pet", {
-      method: "POST",
-      credentials: "include"
-    })
-      .then(function (res) {
+
+    generateBtn.classList.add("hidden");
+
+    fetch("/generate-pet", { method: "POST", credentials: "include" })
+      .then(res => {
         if (res.status === 429) {
-          return res.json().then(function (j) {
+          return res.json().then(j => {
             const ms = Number(j.remaining_ms) || 0;
             messageDiv.textContent = "You must wait before generating again.";
             startCooldown(ms);
@@ -218,11 +135,11 @@ if (generateBtn) {
         if (!res.ok) throw new Error("Failed to generate pet");
         return res.json();
       })
-      .then(function (data) {
+      .then(data => {
         displayPet(data);
         startCooldown(GENERATE_COOLDOWN_MS);
       })
-      .catch(function (err) {
+      .catch(err => {
         if (err && err.message === "On cooldown") return;
         console.error("Failed to generate pet", err);
       });
@@ -230,31 +147,23 @@ if (generateBtn) {
 }
 
 if (saveBtn) {
-  saveBtn.addEventListener("click", function () {
+  saveBtn.addEventListener("click", () => {
     if (!currentPet) {
       alert("You need to generate a pet first!");
       return;
     }
-    nameInput.value = "";
-    modalOverlay.style.display = "flex";
-    nameInput.focus();
+    openNameModal();
   });
 }
 
-modalSaveBtn.addEventListener("click", function () {
-  var name = nameInput.value.trim();
+modalSaveBtn.addEventListener("click", () => {
+  const name = nameInput.value.trim();
   if (!name) {
     alert("Pet name cannot be empty.");
     return;
   }
 
-  var petToSave = {};
-  for (var k in currentPet) {
-    if (Object.prototype.hasOwnProperty.call(currentPet, k)) {
-      petToSave[k] = currentPet[k];
-    }
-  }
-  petToSave.name = name;
+  const petToSave = { ...currentPet, name };
 
   fetch("/save-pet", {
     method: "POST",
@@ -262,26 +171,21 @@ modalSaveBtn.addEventListener("click", function () {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(petToSave)
   })
-    .then(function (res) {
-      if (!res.ok) throw new Error("Failed to save pet");
-      return res.json();
-    })
-    .then(function () {
-      modalOverlay.style.display = "none";
+    .then(res => { if (!res.ok) throw new Error("Failed to save pet"); return res.json(); })
+    .then(() => {
+      closeNameModal();
       messageDiv.textContent = "Pet Saved Successfully!";
-      var container = document.getElementById("pet-container");
+      const container = document.getElementById("pet-container");
       container.innerHTML = "";
       currentPet = null;
-      saveBtn.disabled = true;
+      saveBtn.classList.add("hidden");  
     })
-    .catch(function (err) {
+    .catch(err => {
       console.error("Error saving pet:", err);
       alert("Failed to save pet.");
     });
 });
 
-modalCancelBtn.addEventListener("click", function () {
-  modalOverlay.style.display = "none";
-});
+modalCancelBtn.addEventListener("click", closeNameModal);
 
 checkGenerateCooldownOnLoad();

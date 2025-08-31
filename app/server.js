@@ -347,12 +347,13 @@ const PET_TO_MOVE_DIST = {
 
 const RANK_ORDER = ["Common","Uncommon","Rare","Epic","Mythical","Divine","The One and Only"];
 const RANK_UP_CHANCE = {
-  "Common": 0.6,
-  "Uncommon": 0.05,
-  "Rare": 0.04,
-  "Epic": 0.03,
-  "Mythical": 0.02,
-  "Divine": 0.01,
+  
+  "Common": 0.04,
+  "Uncommon": 0.03,
+  "Rare": 0.02,
+  "Epic": 0.01,
+  "Mythical": 0.005,
+  "Divine": 0.001,
   "The One and Only": 0
 };
 function nextRarity(curr) {
