@@ -72,6 +72,20 @@
     return wrap;
   }
 
+  function rarityClassName(r) {
+  const key = String(r || "").trim().toLowerCase();
+  if (key === "the one and only" || key === "one and only") return "r-legend";
+  const map = {
+    "common": "r-common",
+    "uncommon": "r-uncommon",
+    "rare": "r-rare",
+    "epic": "r-epic",
+    "mythical": "r-mythical",
+    "divine": "r-divine"
+  };
+  return map[key] || "r-common";
+}
+
   function buildAurasAround(imgEl, mutations = []) {
     const wrap = document.createElement("div");
     wrap.className = "sprite-wrap";
@@ -188,11 +202,12 @@
       const typeKey = (data.type || "").trim().toLowerCase();
       const typeEmoji = TYPE_EMOJI[typeKey] || "🔸";
 
+      const raritySpan = `<span class="rarity-text ${rarityClassName(data.rarity)}">${data.rarity}</span>`;
       const grid = document.createElement("div");
       grid.className = "stat-grid";
       grid.innerHTML = `
         <div class="stat-item"><strong>Level:</strong> ${data.level}</div>
-        <div class="stat-item"><strong>Rarity:</strong> ${data.rarity}</div>
+        <div class="stat-item"><strong>Rarity:</strong> ${raritySpan}</div>
         <div class="stat-item"><strong>Type:</strong> ${typeEmoji} ${capFirst(data.type || "")}</div>
         <div class="stat-item"><strong>Speed:</strong> ${data.speed}</div>
         <div class="stat-item"><strong>Attack:</strong> ${data.attack} (+${data.attack_growth}/level)</div>
@@ -265,6 +280,6 @@
     containerEl.appendChild(card);
   }
 
-  global.PetDisplay = { render, TYPE_EMOJI, MUTATION_META, inferMoveRarity };
+  global.PetDisplay = { render, TYPE_EMOJI, MUTATION_META, inferMoveRarity, rarityClassName };
 
 })(window);

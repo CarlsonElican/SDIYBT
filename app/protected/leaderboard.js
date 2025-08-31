@@ -131,103 +131,46 @@ function mountPetSpriteWithAura(imgEl, mutations = []) {
 
 
 function renderProfileToContainer(pet, container) {
+  if (!container) return;
   container.innerHTML = "";
+  if (!window.PetDisplay || typeof PetDisplay.render !== "function") return;
 
-  const title = document.createElement("h3");
-  title.style.textAlign = "center";
-  title.textContent = `${pet.name} — ${pet.username || ""}`;
-  container.appendChild(title);
-
-  const wrap = document.createElement("div");
-  wrap.className = "sprite-wrap";
-  wrap.style.margin = "12px auto";
-  wrap.style.width = "200px";
-  wrap.style.height = "200px";
-  const muts = Array.isArray(pet.mutations) ? pet.mutations : [];
-  muts.forEach(name => {
-    const meta = MUTATION_META[name];
-    if (!meta) return;
-    const aura = document.createElement("div");
-    aura.className = "aura-base " + meta.aura;
-    aura.style.setProperty("--aura-color-1", meta.color);
-    aura.style.setProperty("--aura-color-2", meta.color);
-    aura.style.setProperty("--aura-color-3", meta.color);
-    wrap.appendChild(aura);
-  });
-  const img = document.createElement("img");
-  img.src = pet.sprite;
-  img.alt = "Pet sprite";
-  wrap.appendChild(img);
-  container.appendChild(wrap);
-
-  const rows = [
-    ["Rarity", pet.rarity],
-    ["Type", pet.type],
-    ["Speed", pet.speed],
-    ["Level", pet.level],
-    ["XP", `${pet.xp ?? 0} / ${pet.xp_cap ?? 10}`],
-    ["Health", `${pet.health} (+${pet.health_growth}/level)`],
-    ["Attack", `${pet.attack} (+${pet.attack_growth}/level)`],
-    ["Defense", `${pet.defense} (+${pet.defense_growth}/level)`],
-    ["Rerolls available", `${pet.available_rerolls ?? 0}`],
-  ];
-
-  const mutHeader = document.createElement("p");
-  mutHeader.innerHTML = "<strong>Mutations:</strong>";
-  container.appendChild(mutHeader);
-  container.appendChild(renderMutationsChips(pet.mutations));
-
-  rows.forEach(([k, v]) => {
-    const p = document.createElement("p");
-    p.innerHTML = `<strong>${k}:</strong> ${v}`;
-    container.appendChild(p);
-  });
-
-  const movesHeader = document.createElement("p");
-  movesHeader.innerHTML = "<strong>Moves:</strong>";
-  container.appendChild(movesHeader);
-
-  const ul = document.createElement("ul");
-  ul.style.paddingLeft = "18px";
-
-  for (let s = 1; s <= 4; s++) {
-    const name = pet[`move${s}name`];
-    if (!name) continue;
-    const type = pet[`move${s}type`];
-    const dmg  = pet[`move${s}damage`];
-    if (typeof dmg !== "number" || dmg <= 0) continue;
-
-    let rar = pet[`move${s}rarity`] || rarityFromDmg(dmg);
-
-    const li = document.createElement("li");
-    li.classList.add("move-chip");
-    if (rar === "weak") li.classList.add("rarity-weak");
-    else if (rar === "average") li.classList.add("rarity-average");
-    else if (rar === "based") li.classList.add("rarity-based");
-    else if (rar === "awesome") li.classList.add("rarity-awesome");
-    else if (rar === "legendary") li.classList.add("rarity-legendary");
-
-    li.textContent = `${name} (${type}) - ${dmg} dmg`;
-    ul.appendChild(li);
-  }
-
-  container.appendChild(ul);
+  PetDisplay.render(
+    container,
+    pet,
+    {
+      showTitle: true,
+      showMutations: true,
+      showBars: { health: true, xp: true },
+      showGridStats: true,
+      showMoves: true,
+      showReroll: false,
+      showRerollCount: false,
+      showRankUp: false
+    }
+  );
 }
 
 function openProfileModal(pet) {
-const overlay = qs("#profile-modal");
-const content = qs("#profile-content");
-const closeBtn = qs("#profile-close");
-if (!overlay || !content) return;
+  const overlay = qs("#profile-modal");
+  const content = qs("#profile-content");
+  const closeBtn = qs("#profile-close");
+  if (!overlay || !content) return;
 
-renderProfileToContainer(pet, content);
-overlay.style.display = "flex";
+  renderProfileToContainer(pet, content);
 
-const close = () => { overlay.style.display = "none"; };
-closeBtn?.addEventListener("click", close, { once: true });
-overlay.addEventListener("click", (e) => {
+  if (closeBtn) {
+    closeBtn.classList.remove("modal-btn");
+    closeBtn.classList.add("btn", "modal-close-btn");
+  }
+
+  overlay.style.display = "flex";
+
+  const close = () => { overlay.style.display = "none"; };
+  closeBtn?.addEventListener("click", close, { once: true });
+  overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close();
-}, { once: true });
+  }, { once: true });
 }
 
 async function fetchLeaderboard() {
@@ -303,6 +246,7 @@ if (thead) {
 
     const thLevel = document.createElement("th");
     const lvlBtn = document.createElement("button");
+    lvlBtn.className = "btn lb-sort-btn";
     lvlBtn.textContent = "Level" + (sortKey === "level" ? (sortDir === "asc" ? " ↑" : " ↓") : "");
     lvlBtn.addEventListener("click", () => toggleSort("level"));
     thLevel.appendChild(lvlBtn);
@@ -310,6 +254,7 @@ if (thead) {
 
     const thRarity = document.createElement("th");
     const rarBtn = document.createElement("button");
+    rarBtn.className = "btn lb-sort-btn";
     rarBtn.textContent = "Rarity" + (sortKey === "rarity" ? (sortDir === "asc" ? " ↑" : " ↓") : "");
     rarBtn.addEventListener("click", () => toggleSort("rarity"));
     thRarity.appendChild(rarBtn);
