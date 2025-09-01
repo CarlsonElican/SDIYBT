@@ -7,33 +7,32 @@
   <link rel="stylesheet" href="/navbar/navbar.css">
 
 </head>
-<body>
+<body class="leaderboard-page">
   <div id="navbar-id"></div>
+  <div class="nav-spacer" aria-hidden="true"></div>
 
   <h2 style="text-align:center;margin-top:16px;">Leaderboard</h2>
 
-  <div style="max-width:900px;margin:0 auto 10px auto;">
+  <div class="lb-frame">
+    <table class="table" id="lb-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Pet Name</th>
+          <th>Level</th>
+          <th>Rarity</th>
+          <th>Profile</th>
+        </tr>
+      </thead>
+      <tbody id="lb-body"></tbody>
+    </table>
   </div>
-
-  <table class="table" id="lb-table">
-    <thead>
-      <tr>
-        <th>User</th>
-        <th>Pet Name</th>
-        <th>Level</th>
-        <th>Rarity</th>
-        <th>Profile</th>
-      </tr>
-    </thead>
-    <tbody id="lb-body">
-    </tbody>
-  </table>
 
   <div class="modal-overlay" id="profile-modal">
     <div class="modal-box">
       <div id="profile-content"></div>
-      <div style="text-align:right;margin-top:10px;">
-        <button id="profile-close">Close</button>
+      <div style="text-align:center;margin-top:14px;">
+        <button id="profile-close" class="btn modal-close-btn">Close</button>
       </div>
     </div>
   </div>

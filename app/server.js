@@ -347,11 +347,11 @@ const PET_TO_MOVE_DIST = {
 const RANK_ORDER = ["Common","Uncommon","Rare","Epic","Mythical","Divine","The One and Only"];
 const RANK_UP_CHANCE = {
   
-  "Common": 0.004,
-  "Uncommon": 0.003,
-  "Rare": 0.002,
-  "Epic": 0.001,
-  "Mythical": 0.0005,
+  "Common": 0.04,
+  "Uncommon": 0.03,
+  "Rare": 0.02,
+  "Epic": 0.01,
+  "Mythical": 0.005,
   "Divine": 0.0001,
   "The One and Only": 0
 };
@@ -1054,13 +1054,10 @@ function indexToRarity(i) {
 }
 
 function getAvailableRerolls(level, spent) {
-  const totalMilestones =
-    level < 80 ? 0 :
-    level >= 100 ? 2 : 1;
+  const totalMilestones = level <= 60 ? 0 : Math.floor((level - 60) / 5);
 
   const used = Math.max(0, Number.isFinite(spent) ? spent : 0);
-  const available = Math.max(0, totalMilestones - used);
-  return available;
+  return Math.max(0, totalMilestones - used);
 }
 
 const REROLL_ODDS = {

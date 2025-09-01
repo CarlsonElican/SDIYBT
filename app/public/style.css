@@ -654,12 +654,24 @@ nav li { margin: 0; }
 
 /* Leaderboard */
 
+html { height: auto; overflow-y: auto; }
+
+body.leaderboard-page {
+  display: block;     
+  height: auto;                    
+  min-height: 100dvh;
+  overflow-y: auto;          
+  padding-top: 8px;  
+  padding-bottom: 48px;           
+}
+
+.nav-spacer {
+  height: calc(var(--navbar-h, 56px));
+}
+
 .lb-frame {
-  border: 4px solid #000;
-  border-radius: 14px;
-  overflow: hidden;        
-  background: #000;         
-  margin-top: calc(var(--navbar-h, 56px) + 12px); 
+  border-radius: 14px;         
+  margin-top: 0;
 }
 
 #lb-table {
@@ -670,8 +682,9 @@ nav li { margin: 0; }
   border-spacing: 0;
   overflow: hidden;
   background: #fff;
-  margin-top: calc(var(--navbar-h, 56px) + 12px);
+  margin-top: 0;
 }
+
 #lb-table thead tr { background: #000; }
 #lb-table thead th {
   color: #000;
