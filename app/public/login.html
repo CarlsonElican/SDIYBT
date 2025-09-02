@@ -1,34 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<meta charset="utf-8">
-	<title>Log In</title>
-	<link rel="stylesheet" type="text/css" href="style.css">
+  <meta charset="utf-8">
+  <title>Log In</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/navbar/navbar.css">
 </head>
-<body>
-<div class = "title">
-	<p>Log In</p>
-</div>
+<body class="auth-page">
+  <div id="navbar-id"></div>
 
+  <main class="auth-container">
+    <section class="auth-card">
+      <h1 class="auth-title">Log In</h1>
 
-<div class="form">
-  <div class="form-row">
-    <label for="un">Username:</label>
-    <input id="un" type="text" name="un">
-  </div>
-  <div class="form-row">
-    <label for="pw">Password:</label>
-    <input id="pw" type="password" name="pw">
-  </div>
-  <button id="showPW" type="button">Show Password</button>
-  <button id="submit">Log In</button>
-</div>
+      <div class="form">
+        <div class="form-row">
+          <label for="un">Username:</label>
+          <input id="un" type="text" name="un" class="input" autocomplete="username">
+        </div>
 
-<div id="redirect"> <a href="signup.html"> Need an account? Sign Up</a></div>
+        <div class="form-row">
+          <label for="pw">Password:</label>
+          <input id="pw" type="password" name="pw" class="input" autocomplete="current-password">
+        </div>
 
-<div id="message"></div>
+        <div class="auth-actions">
+          <button id="showPW" type="button" class="btn">Show Password</button>
+          <button id="submit" type="button" class="btn">Log In</button>
+        </div>
+      </div>
 
-<script src="login.js"></script>
+      <div id="message"></div>
+      <div class="auth-redirect">
+        <a href="/signup.html">Need an account? Sign Up</a>
+      </div>
+    </section>
+  </main>
 
+  <script src="/navbar/navbar.js"></script>
+  <script src="/login.js"></script>
 </body>
 </html>
