@@ -761,14 +761,19 @@ body.auth-page {
   display: block;
   height: auto;
   min-height: 100dvh;
-  padding-top: calc(var(--navbar-h, 56px) + 16px);
-  padding-bottom: 48px;
-  overflow-y: auto;
+  padding-top: var(--navbar-h, 56px);
+  padding-bottom: 0;
+  overflow: hidden; 
 }
 
 .auth-container {
-  width: min(520px, 92%);
+  min-height: calc(100dvh - var(--navbar-h, 56px));
+  width: calc(100dvh - var(--navbar-h, 56px));
   margin: 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 0 16px;
+  overflow: hidden; 
 }
 
 .auth-card {
@@ -778,6 +783,7 @@ body.auth-page {
   padding: 24px;
   box-shadow: 0 8px 18px rgba(0,0,0,.08);
   width: min(520px, 92vw);
+  margin: 0;
 }
 
 .auth-title {
