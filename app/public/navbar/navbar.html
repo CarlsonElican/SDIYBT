@@ -1,17 +1,27 @@
 <nav class="navbar">
-    <ul>
-        <li><a href="/main">Home</a></li>
-        <li id="greeting-li" style="margin-left:auto; margin-right: 12px;">
-            <span id="navbar-greeting"></span>
-        </li>
-        <li>
-            <button id="trainer" class="trainer-button">Trainer</button>
-        </li>
-        <li>
-            <button id="leaderboard" class="leaderboard-button">Leaderboard</button>
-        </li>
-        <li>
-            <button id="signout" class="signout-button">Sign Out</button>
-        </li>
-    </ul>
+  <ul>
+    <li id="greeting-li"><span id="navbar-greeting"></span></li>
+
+    <li><a href="/main" class="nav-link">Randomizer</a></li>
+    <li><a href="/trainer" id="trainer" class="nav-link">Trainer</a></li>
+    <li><a href="/leaderboard" id="leaderboard" class="nav-link">Leaderboard</a></li>
+
+    <li><a href="#" id="signout" class="nav-link">Sign Out</a></li>
+  </ul>
+
+  <div id="signout-modal" class="modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+
+  <div class="modal-dialog" role="dialog" aria-modal="true"
+       aria-labelledby="signout-title" aria-describedby="signout-desc">
+    <h3 id="signout-title" style="margin:0 0 8px;">Sign out?</h3>
+    <p id="signout-desc" style="margin:0 0 16px;">
+      You will return to the home page.
+    </p>
+    <div class="modal-actions">
+        <button id="signout-cancel"  class="modal-btn">Cancel</button>
+        <button id="signout-confirm" class="modal-btn">Sign Out</button>
+    </div>
+  </div>
+</div>
 </nav>

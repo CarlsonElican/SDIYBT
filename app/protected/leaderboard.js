@@ -25,85 +25,174 @@ const i = RARITY_ORDER.findIndex(x => x.toLowerCase() === String(r).toLowerCase(
 return i === -1 ? 999 : i;
 };
 
-function renderProfileToContainer(pet, container) {
-container.innerHTML = "";
-
-const title = document.createElement("h3");
-title.style.textAlign = "center";
-title.textContent = `${pet.name} — ${pet.username || ""}`;
-container.appendChild(title);
-
-const img = document.createElement("img");
-img.src = pet.sprite;
-img.alt = "Pet sprite";
-img.style.display = "block";
-img.style.margin = "12px auto";
-container.appendChild(img);
-
-const rows = [
-    ["Rarity", pet.rarity],
-    ["Type", pet.type],
-    ["Speed", pet.speed],
-    ["Mutations", joinOrNone(pet.mutations)],
-    ["Level", pet.level],
-    ["XP", `${pet.xp ?? 0} / ${pet.xp_cap ?? 10}`],
-    ["Health", `${pet.health} (+${pet.health_growth}/level)`],
-    ["Attack", `${pet.attack} (+${pet.attack_growth}/level)`],
-    ["Defense", `${pet.defense} (+${pet.defense_growth}/level)`],
-    ["Rerolls available", `${pet.available_rerolls ?? 0}`],
-];
-
-rows.forEach(([k, v]) => {
-    const p = document.createElement("p");
-    p.innerHTML = `<strong>${k}:</strong> ${v}`;
-    container.appendChild(p);
-});
-
-const movesHeader = document.createElement("p");
-movesHeader.innerHTML = "<strong>Moves:</strong>";
-container.appendChild(movesHeader);
-
-const ul = document.createElement("ul");
-ul.style.paddingLeft = "18px";
-
-for (let s = 1; s <= 4; s++) {
-    const name = pet[`move${s}name`];
-    if (!name) continue;
-    const type = pet[`move${s}type`];
-    const dmg  = pet[`move${s}damage`];
-    if (typeof dmg !== "number" || dmg <= 0) continue;
-
-    let rar = pet[`move${s}rarity`] || rarityFromDmg(dmg);
-
-    const li = document.createElement("li");
-    li.classList.add("move-chip");
-    if (rar === "weak") li.classList.add("rarity-weak");
-    else if (rar === "average") li.classList.add("rarity-average");
-    else if (rar === "based") li.classList.add("rarity-based");
-    else if (rar === "awesome") li.classList.add("rarity-awesome");
-    else if (rar === "legendary") li.classList.add("rarity-legendary");
-
-    li.textContent = `${name} (${type}) - ${dmg} dmg`;
-    ul.appendChild(li);
+function rarityClassName(r) {
+  const key = String(r || "").toLowerCase().replace(/[^a-z]/g, "");
+  const map = {
+    common: "r-common",
+    uncommon: "r-uncommon",
+    rare: "r-rare",
+    epic: "r-epic",
+    mythical: "r-mythical",
+    divine: "r-divine",
+    theoneandonly: "r-legend", 
+    legend: "r-legend",
+    legendary: "r-legend",
+  };
+  return map[key] || "";
 }
 
-container.appendChild(ul);
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[m]));
+}
+
+const MUTATION_META = {
+  Frozen:     { emoji: "❄️", aura: "aura-pulse",   color: "#76c7ff" },
+  Fiery:      { emoji: "🔥", aura: "aura-flicker", color: "#ff6b3d" },
+  Golden:     { emoji: "🪙", aura: "aura-sparkle", color: "#ffd54f" },
+  Shadow:     { emoji: "🌑", aura: "aura-wave",    color: "#5e5b8a" },
+  Crystal:    { emoji: "💎", aura: "aura-sparkle", color: "#7fe3ff" },
+  Toxic:      { emoji: "☣️", aura: "aura-pulse",   color: "#99e26b" },
+  Glowing:    { emoji: "💡", aura: "aura-pulse",   color: "#f5ff7a" },
+  Radiant:    { emoji: "✨", aura: "aura-sparkle", color: "#ffd54f" },
+  Cursed:     { emoji: "🕯️", aura: "aura-wave",    color: "#a675ff" },
+  Shocked:    { emoji: "⚡", aura: "aura-flicker", color: "#ffe45e" },
+  Ancient:    { emoji: "🏺", aura: "aura-pulse",   color: "#c9a36b" },
+  Metallic:   { emoji: "⚙️", aura: "aura-spin",    color: "#b0bec5" },
+  Obsidian:   { emoji: "🪨", aura: "aura-wave",    color: "#4a3f5c" },
+  Lunar:      { emoji: "🌙", aura: "aura-pulse",   color: "#c3d8ff" },
+  Solar:      { emoji: "☀️", aura: "aura-sparkle", color: "#ffcc66" },
+  Stormy:     { emoji: "🌩️", aura: "aura-flicker",color: "#9ec3ff" },
+  Void:       { emoji: "🕳️", aura: "aura-wave",    color: "#6b00b3" },
+  Arcane:     { emoji: "🔮", aura: "aura-sparkle", color: "#c07bff" },
+  Spiky:      { emoji: "🌵", aura: "aura-pulse",   color: "#88d06a" },
+  Corrupted:  { emoji: "🧪", aura: "aura-flicker", color: "#b96eff" },
+  Astral:     { emoji: "🌌", aura: "aura-sparkle", color: "#70b2ff" },
+  Blighted:   { emoji: "🍂", aura: "aura-wave",    color: "#a8d65e" },
+  Runic:      { emoji: "ᚠ", aura: "aura-spin",    color: "#7dd3fc" },
+  Chaotic:    { emoji: "🌀", aura: "aura-flicker", color: "#ff8fb1" },
+  Enchanted:  { emoji: "🪄", aura: "aura-sparkle", color: "#b388ff" },
+  Ghostly:    { emoji: "👻", aura: "aura-pulse",   color: "#b3e5fc" },
+  Cutesy:     { emoji: "💖", aura: "aura-sparkle", color: "#ffa3d1" },
+  Slimey:     { emoji: "🟢", aura: "aura-wave",    color: "#87e36e" },
+  Grassy:     { emoji: "🌿", aura: "aura-pulse",   color: "#7dd37b" },
+  Sigma:      { emoji: "Σ",  aura: "aura-spin",    color: "#8bc7ff" },
+  Skibidi:    { emoji: "🧻", aura: "aura-flicker", color: "#ffc299" },
+  Holy:       { emoji: "🕊️", aura: "aura-sparkle", color: "#fff2a8" },
+  Shiny:      { emoji: "🌟", aura: "aura-sparkle", color: "#ffe06b" },
+};
+
+function buildSpriteWithAuras(spriteUrl, mutations = []) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "aura-base";
+  const effects = new Set();
+  const colors = [];
+  mutations.forEach(m => {
+    const meta = MUTATION_META[m];
+    if (!meta) return;
+    effects.add(meta.aura);
+    colors.push(meta.color);
+  });
+  effects.forEach(cls => wrapper.classList.add(cls));
+  if (colors[0]) wrapper.style.setProperty("--aura-color-1", colors[0]);
+  if (colors[1]) wrapper.style.setProperty("--aura-color-2", colors[1]);
+  if (colors[2]) wrapper.style.setProperty("--aura-color-3", colors[2]);
+  const img = document.createElement("img");
+  img.className = "pet-sprite";
+  img.src = spriteUrl;
+  img.alt = "Pet sprite";
+  wrapper.appendChild(img);
+  return wrapper;
+}
+
+function renderMutationsChips(muts = []) {
+  const wrap = document.createElement("div");
+  wrap.className = "mutations-wrap";
+  muts.forEach(name => {
+    const meta = MUTATION_META[name] || { emoji: "🧬", color: "#ccc" };
+    const chip = document.createElement("span");
+    chip.className = "mutation-chip";
+    chip.style.borderColor = meta.color;
+    chip.textContent = `${meta.emoji} ${name}`;
+    wrap.appendChild(chip);
+  });
+  return wrap;
+}
+
+function mountPetSpriteWithAura(imgEl, mutations = []) {
+  const seenColors = new Set();
+  const colors = [];
+  const effects = [];
+
+  (mutations || []).forEach(name => {
+    const meta = MUTATION_META[name];
+    if (!meta) return;
+    if (!seenColors.has(meta.color)) {
+      seenColors.add(meta.color);
+      colors.push(meta.color);
+    }
+    if (effects.length < 2 && meta.aura && !effects.includes(meta.aura)) {
+      effects.push(meta.aura);
+    }
+  });
+  const wrap = document.createElement("div");
+  wrap.className = ["aura-base", ...effects].join(" ").trim();
+
+  const c1 = colors[0] || "transparent";
+  const c2 = colors[1] || colors[0] || "transparent";
+  const c3 = colors[2] || colors[1] || colors[0] || "transparent";
+  wrap.style.setProperty("--aura-color-1", c1);
+  wrap.style.setProperty("--aura-color-2", c2);
+  wrap.style.setProperty("--aura-color-3", c3);
+
+  imgEl.classList.add("pet-sprite");
+  wrap.appendChild(imgEl);
+  return wrap;
+}
+
+
+function renderProfileToContainer(pet, container) {
+  if (!container) return;
+  container.innerHTML = "";
+  if (!window.PetDisplay || typeof PetDisplay.render !== "function") return;
+
+  PetDisplay.render(
+    container,
+    pet,
+    {
+      showTitle: true,
+      showMutations: true,
+      showBars: { health: true, xp: true },
+      showGridStats: true,
+      showMoves: true,
+      showReroll: false,
+      showRerollCount: false,
+      showRankUp: false
+    }
+  );
 }
 
 function openProfileModal(pet) {
-const overlay = qs("#profile-modal");
-const content = qs("#profile-content");
-const closeBtn = qs("#profile-close");
-if (!overlay || !content) return;
+  const overlay = qs("#profile-modal");
+  const content = qs("#profile-content");
+  const closeBtn = qs("#profile-close");
+  if (!overlay || !content) return;
 
-renderProfileToContainer(pet, content);
-overlay.style.display = "flex";
+  renderProfileToContainer(pet, content);
 
-const close = () => { overlay.style.display = "none"; };
-closeBtn?.addEventListener("click", close, { once: true });
-overlay.addEventListener("click", (e) => {
+  if (closeBtn) {
+    closeBtn.classList.remove("modal-btn");
+    closeBtn.classList.add("btn", "modal-close-btn");
+  }
+
+  overlay.style.display = "flex";
+
+  const close = () => { overlay.style.display = "none"; };
+  closeBtn?.addEventListener("click", close, { once: true });
+  overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close();
-}, { once: true });
+  }, { once: true });
 }
 
 async function fetchLeaderboard() {
@@ -179,6 +268,7 @@ if (thead) {
 
     const thLevel = document.createElement("th");
     const lvlBtn = document.createElement("button");
+    lvlBtn.className = "btn lb-sort-btn";
     lvlBtn.textContent = "Level" + (sortKey === "level" ? (sortDir === "asc" ? " ↑" : " ↓") : "");
     lvlBtn.addEventListener("click", () => toggleSort("level"));
     thLevel.appendChild(lvlBtn);
@@ -186,6 +276,7 @@ if (thead) {
 
     const thRarity = document.createElement("th");
     const rarBtn = document.createElement("button");
+    rarBtn.className = "btn lb-sort-btn";
     rarBtn.textContent = "Rarity" + (sortKey === "rarity" ? (sortDir === "asc" ? " ↑" : " ↓") : "");
     rarBtn.addEventListener("click", () => toggleSort("rarity"));
     thRarity.appendChild(rarBtn);
@@ -246,8 +337,9 @@ sorted.forEach(row => {
   tr.appendChild(tdLvl);
 
   const tdRarity = document.createElement("td");
-  tdRarity.textContent = String(rarity);
+  tdRarity.innerHTML = `<span class="rarity-text ${rarityClassName(rarity)}">${escapeHtml(rarity)}</span>`;
   tr.appendChild(tdRarity);
+
 
   tbody.appendChild(tr);
 });

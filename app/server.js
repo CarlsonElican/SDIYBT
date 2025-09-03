@@ -31,10 +31,13 @@ const r2 = new S3Client({
 });
 
 const pool = new pg.Pool({
-  connectionString: "postgresql://neondb_owner:npg_mpqW7HL6crvz@ep-cold-base-aep1ue78-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: true }
 });
 
-const GENERATE_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
+const GENERATE_COOLDOWN_MS = 2 * 60 * 1000; // 2 
+const MAX_LEVEL = 1000;
+
 
 
 app.use(session({
@@ -46,7 +49,6 @@ app.use(session({
 
 app.use(express.static("public"));
 app.use(express.json());
-// add any protected links through
 app.use("/protected", express.static(__dirname + "/protected"));
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -133,8 +135,6 @@ app.get("/me", async (req, res) => {
     res.status(500).json({ error: "Failed to load user" });
   }
 });
-
-//profile picture upload
 
 const AVATAR_DIR = path.join(__dirname, "uploads", "avatars");
 fs.mkdirSync(AVATAR_DIR, { recursive: true });
@@ -226,19 +226,19 @@ async function performLevelUp(username) {
     `
     UPDATE pets
     SET
-      level   = LEAST(COALESCE(level, 1) + 1, 100),
-      health  = COALESCE(health, 0)  + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(health_growth, 0)  ELSE 0 END,
-      attack  = COALESCE(attack, 0)  + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(attack_growth, 0)  ELSE 0 END,
-      defense = COALESCE(defense, 0) + CASE WHEN COALESCE(level, 1) < 100 THEN COALESCE(defense_growth, 0) ELSE 0 END
+      level   = LEAST(COALESCE(level, 1) + 1, $2),
+      health  = COALESCE(health, 0)  + CASE WHEN COALESCE(level, 1) < $2 THEN COALESCE(health_growth, 0)  ELSE 0 END,
+      attack  = COALESCE(attack, 0)  + CASE WHEN COALESCE(level, 1) < $2 THEN COALESCE(attack_growth, 0)  ELSE 0 END,
+      defense = COALESCE(defense, 0) + CASE WHEN COALESCE(level, 1) < $2 THEN COALESCE(defense_growth, 0) ELSE 0 END
     WHERE username = $1
     RETURNING *`,
-    [username]
+    [username, MAX_LEVEL]
   );
   if (up.rows.length === 0) throw new Error("No pet found for level up");
 
   let pet = up.rows[0];
 
-  if ((pet.level ?? 1) >= 100) {
+  if ((pet.level ?? 1) >= MAX_LEVEL) {
     await pool.query("UPDATE pets SET xp = 0, xp_cap = 0 WHERE username = $1", [username]);
     const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [username]);
     pet = refetch.rows[0];
@@ -299,22 +299,34 @@ async function performLevelUp(username) {
     if (current.length < 5) {
       const have = new Set(current.map(m => String(m || "").toLowerCase()));
       let newMutation = null;
-
       for (let tries = 0; tries < 12; tries++) {
-        const candidate = randomize.getMutation(1); 
+        const candidate = randomize.getMutation(1);
         if (candidate && !have.has(candidate.toLowerCase())) {
           newMutation = candidate;
           break;
         }
       }
-
       if (newMutation) {
         current.push(newMutation);
         await pool.query(
           "UPDATE pets SET mutations = $2 WHERE username = $1",
           [username, current]
         );
-        pet.mutations = current; 
+        pet.mutations = current;
+      }
+    }
+  }
+
+  if (!pet.rank_up_pending) {
+    const next = nextRarity(pet.rarity);
+    if (next) {
+      const chance = RANK_UP_CHANCE[pet.rarity] || 0;
+      if (Math.random() < chance) {
+        const upd = await pool.query(
+          "UPDATE pets SET rank_up_pending = TRUE, rank_up_target = $2 WHERE username = $1 RETURNING *",
+          [username, next]
+        );
+        pet = upd.rows[0];
       }
     }
   }
@@ -333,6 +345,21 @@ const PET_TO_MOVE_DIST = {
   "The One and Only": { weak:0,  average:0,  based:0,  awesome:0,   legendary:100 }
 };
 
+const RANK_ORDER = ["Common","Uncommon","Rare","Epic","Mythical","Divine","The One and Only"];
+const RANK_UP_CHANCE = {
+  
+  "Common": 0.04,
+  "Uncommon": 0.03,
+  "Rare": 0.02,
+  "Epic": 0.01,
+  "Mythical": 0.005,
+  "Divine": 0.0001,
+  "The One and Only": 0
+};
+function nextRarity(curr) {
+  const i = RANK_ORDER.indexOf(curr);
+  return (i >= 0 && i < RANK_ORDER.length - 1) ? RANK_ORDER[i + 1] : null;
+}
 
 function inWeak(power)       { return power >= 1   && power <= 49; }
 function inAverage(power)    { return power >= 50  && power <= 80; }
@@ -476,6 +503,31 @@ async function generateMovesForPet(petRarity) {
   return out;
 }
 
+function regenPassiveExpFields(pet) {
+  const max = Number.isFinite(pet.passive_exp_max) ? pet.passive_exp_max : 2500;
+  let pexp = Number.isFinite(pet.passive_exp) ? pet.passive_exp : 0;
+
+  const last = pet.passive_exp_updated_at ? new Date(pet.passive_exp_updated_at) : null;
+  const now = new Date();
+
+  if (!last) {
+    return { passive_exp: pexp, passive_exp_max: max, passive_exp_updated_at: now, changed: true };
+  }
+
+  const ticks = Math.floor((now - last) / 30000);
+  if (ticks <= 0) {
+    return { passive_exp: pexp, passive_exp_max: max, passive_exp_updated_at: now, changed: false };
+  }
+
+  const gained = Math.min(ticks, Math.max(0, max - pexp));
+  return {
+    passive_exp: pexp + gained,
+    passive_exp_max: max,
+    passive_exp_updated_at: now,
+    changed: gained > 0
+  };
+}
+
 async function randomizePet(sessionUser) {
   const randomId = Math.floor(Math.random() * 898) + 1;
   const pokeRes = await fetch(`https://pokeapi.co/api/v2/pokemon/${randomId}`);
@@ -584,7 +636,7 @@ app.post("/gain-xp", async (req, res) => {
 
     let pet = petRes.rows[0];
 
-    if ((pet.level ?? 1) >= 100) {
+    if ((pet.level ?? 1) >= MAX_LEVEL) {
       if ((pet.xp ?? 0) !== 0 || (pet.xp_cap ?? 0) !== 0) {
         await pool.query(
           "UPDATE pets SET xp = 0, xp_cap = 0 WHERE username = $1",
@@ -602,7 +654,7 @@ app.post("/gain-xp", async (req, res) => {
 
     if (newXp >= newCap) {
       newXp = 0;
-      newCap = Math.ceil(newCap * 1.06);
+      newCap = newCap += 10
 
       await pool.query(
         "UPDATE pets SET xp = $2, xp_cap = $3 WHERE username = $1",
@@ -626,6 +678,77 @@ app.post("/gain-xp", async (req, res) => {
   }
 });
 
+app.post("/train", async (req, res) => {
+  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+
+  try {
+    const r = await pool.query("SELECT * FROM pets WHERE username=$1", [req.session.username]);
+    if (!r.rows.length) return res.status(404).json({ error: "No pet found" });
+    let pet = r.rows[0];
+
+    if ((pet.level ?? 1) >= MAX_LEVEL) {
+      if ((pet.xp ?? 0) !== 0 || (pet.xp_cap ?? 0) !== 0) {
+        await pool.query("UPDATE pets SET xp=0, xp_cap=0 WHERE username=$1", [req.session.username]);
+        const refetch = await pool.query("SELECT * FROM pets WHERE username=$1", [req.session.username]);
+        pet = refetch.rows[0];
+      }
+      const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+      return res.json({ ...pet, xp: 0, xp_cap: 0, available_rerolls });
+    }
+
+    const regen = regenPassiveExpFields(pet);
+    let pexp = regen.passive_exp;
+    const pmax = regen.passive_exp_max;
+    let pupdated = regen.passive_exp_updated_at;
+
+    if (regen.changed) {
+      const upd = await pool.query(
+        `UPDATE pets SET passive_exp=$2, passive_exp_max=$3, passive_exp_updated_at=$4 WHERE username=$1 RETURNING *`,
+        [req.session.username, pexp, pmax, pupdated]
+      );
+      pet = upd.rows[0];
+      pexp = pet.passive_exp;
+    }
+
+    if (pexp <= 0) {
+      return res.status(400).json({ error: "No Passive EXP to claim", passive_exp: pexp, passive_exp_max: pmax });
+    }
+
+    let xp = pet.xp ?? 0;
+    let cap = pet.xp_cap ?? 10;
+
+    const room = Math.max(0, cap - xp);
+    const grant = Math.min(pexp, room);
+
+    xp += grant;
+    pexp -= grant;
+    pupdated = new Date();
+
+    if (xp >= cap) {
+      await pool.query(
+        "UPDATE pets SET xp=$2, xp_cap=$3, passive_exp=$4, passive_exp_updated_at=$5 WHERE username=$1",
+        [req.session.username, 0, cap += 10, pexp, pupdated]
+      );
+      const leveled = await performLevelUp(req.session.username);
+      leveled.passive_exp = pexp;
+      leveled.passive_exp_max = pmax;
+      leveled.passive_exp_updated_at = pupdated;
+      return res.json(leveled);
+    } else {
+      const upd = await pool.query(
+        "UPDATE pets SET xp=$2, passive_exp=$3, passive_exp_updated_at=$4 WHERE username=$1 RETURNING *",
+        [req.session.username, xp, pexp, pupdated]
+      );
+      const pet2 = upd.rows[0];
+      const available_rerolls = getAvailableRerolls(pet2.level, pet2.rerolls_spent);
+      return res.json({ ...pet2, available_rerolls });
+    }
+  } catch (e) {
+    console.error("Train error:", e);
+    return res.status(500).json({ error: "Training failed" });
+  }
+});
+
 app.post("/levelup", async (req, res) => {
   if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
   try {
@@ -634,6 +757,35 @@ app.post("/levelup", async (req, res) => {
   } catch (e) {
     console.error("Error level-up:", e);
     return res.status(500).json({ error: "Failed to level up" });
+  }
+});
+
+app.post("/rank-up", async (req, res) => {
+  if (!req.session.username) return res.status(401).json({ error: "Not logged in" });
+
+  try {
+    const upd = await pool.query(
+      `UPDATE pets
+         SET rarity = rank_up_target,
+             rank_up_pending = FALSE,
+             rank_up_target = NULL
+       WHERE username = $1
+         AND rank_up_pending = TRUE
+         AND rank_up_target IS NOT NULL
+       RETURNING *`,
+      [req.session.username]
+    );
+
+    if (upd.rows.length === 0) {
+      return res.status(400).json({ error: "No rank-up available" });
+    }
+
+    const pet = upd.rows[0];
+    const available_rerolls = getAvailableRerolls(pet.level, pet.rerolls_spent);
+    return res.json({ ...pet, available_rerolls });
+  } catch (e) {
+    console.error("Rank-up error:", e);
+    return res.status(500).json({ error: "Rank up failed" });
   }
 });
 
@@ -839,13 +991,33 @@ app.get("/my-pet", async (req, res) => {
     }
 
     const petRow = result.rows[0];
+
+    const regen = regenPassiveExpFields(petRow);
+    if (regen.changed) {
+      const upd = await pool.query(
+        `UPDATE pets
+           SET passive_exp=$2,
+               passive_exp_max=$3,
+               passive_exp_updated_at=$4
+         WHERE username=$1
+         RETURNING *`,
+        [req.session.username, regen.passive_exp, regen.passive_exp_max, regen.passive_exp_updated_at]
+      );
+      petRow.passive_exp = upd.rows[0].passive_exp;
+      petRow.passive_exp_max = upd.rows[0].passive_exp_max;
+      petRow.passive_exp_updated_at = upd.rows[0].passive_exp_updated_at;
+    } else {
+      petRow.passive_exp = regen.passive_exp;
+      petRow.passive_exp_max = regen.passive_exp_max;
+      petRow.passive_exp_updated_at = regen.passive_exp_updated_at;
+    }
+
     const available_rerolls = getAvailableRerolls(petRow.level, petRow.rerolls_spent);
 
     console.log("LVL:", petRow.level, "spent:", petRow.rerolls_spent, "avail:", available_rerolls);
-
     console.log("Pet retrieved for:", req.session.username);
-    res.json({ ...petRow, available_rerolls });
 
+    res.json({ ...petRow, available_rerolls });
   } catch (err) {
     console.error("Error fetching pet:", err);
     res.status(500).json({ error: "Failed to retrieve pet" });
@@ -883,30 +1055,25 @@ function indexToRarity(i) {
 }
 
 function getAvailableRerolls(level, spent) {
-  const totalMilestones =
-    level < 80 ? 0 :
-    level >= 100 ? 2 : 1;
+  const totalMilestones = level <= 60 ? 0 : Math.floor((level - 60) / 5);
 
   const used = Math.max(0, Number.isFinite(spent) ? spent : 0);
-  const available = Math.max(0, totalMilestones - used);
-  return available;
+  return Math.max(0, totalMilestones - used);
 }
 
 const REROLL_ODDS = {
-  "Common":           { same: 60, up1: 40, up2: 0 },
-  "Uncommon":         { same: 45, up1: 50, up2: 5 },
-  "Rare":             { same: 40, up1: 50, up2: 10 },
-  "Epic":             { same: 30, up1: 55, up2: 15 },
-  "Mythical":         { same: 20, up1: 60, up2: 20 },
-  "Divine":           { same: 10, up1: 60, up2: 30 },
-  "The One and Only": { same: 100, up1: 0,  up2: 0 }
+  "Common":           { same: 85, up1: 15 },
+  "Uncommon":         { same: 75, up1: 25 },
+  "Rare":             { same: 70, up1: 30 },
+  "Epic":             { same: 65, up1: 35 },
+  "Mythical":         { same: 60, up1: 40 },
+  "Divine":           { same: 55, up1: 45 },
+  "The One and Only": { same: 100, up1: 0 }
 };
 
 function rollRerollStep(odds) {
   const r = Math.random() * 100;
-  if (r < odds.same) return 0;
-  if (r < odds.same + odds.up1) return 1;
-  return 2;
+  return r < odds.same ? 0 : 1;
 }
 
 app.post("/reroll-move", async (req, res) => {
@@ -947,7 +1114,7 @@ app.post("/reroll-move", async (req, res) => {
     let pick = null;
     const order = ["legendary","awesome","based","average","weak"];
     const targetIdx = order.indexOf(targetBucket);
-    const searchOrder = [targetIdx, targetIdx-1, targetIdx+1, targetIdx-2, targetIdx+2]
+    const searchOrder = [targetIdx, targetIdx-1, targetIdx+1]
       .filter(i => i >= 0 && i < order.length)
       .map(i => order[i]);
 

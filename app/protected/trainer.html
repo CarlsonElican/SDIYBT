@@ -3,81 +3,11 @@
 <head>
   <meta charset="utf-8">
   <title>Trainer Page</title>
-  <link rel="stylesheet" type="text/css" href="style.css">
-  <style>
-    .move-chip {
-      border-width: 3px;
-      border-style: solid;
-      padding: 6px 10px;
-      border-radius: 10px;
-      margin-bottom: 6px;
-      list-style: none;
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .rarity-weak    { border-color: #9be7a3; }
-    .rarity-average { border-color: #64b5f6; }
-    .rarity-based   { border-color: #ba68c8; }
-    .rarity-awesome { border-color: #ef5350; }
-    .rarity-legendary {
-      border: 3px solid transparent;
-      border-radius: 10px;
-      background:
-        linear-gradient(#fff, #fff) padding-box,
-        linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet, red) border-box;
-      background-size: 100% 100%, 300% 100%;
-      animation: rainbow-move 3s linear infinite;
-    }
-    @keyframes rainbow-move {
-      0%   { background-position: 0 0,   0% 0; }
-      100% { background-position: 0 0, 100% 0; }
-    }
-
-    .trainer-layout {
-      display: grid;
-      grid-template-columns: 260px 1fr;
-      gap: 20px;
-      max-width: 1100px;
-      margin: 20px auto;
-      align-items: start;
-    }
-    .trainer-sidebar {
-      border: 1px solid #ddd;
-      padding: 16px;
-      border-radius: 10px;
-      background: #fafafa;
-      text-align: center;
-    }
-    .avatar {
-      width: 200px;
-      height: 200px;
-      object-fit: cover;
-      border-radius: 12px;
-      border: 1px solid #ccc;
-      background: #f0f0f0;
-      display: block;
-      margin: 0 auto 10px auto;
-    }
-    .username {
-      font-weight: bold;
-      margin: 8px 0 14px 0;
-    }
-    .upload-hint {
-      font-size: 12px;
-      color: #666;
-      margin-top: 6px;
-      line-height: 1.3;
-    }
-  </style>
+  <link rel="stylesheet" type="text/css" href="/style.css">
+  <link rel="stylesheet" href="/navbar/navbar.css">
 </head>
 <body>
   <div id="navbar-id"></div>
-
-  <div style="text-align:center; margin-top: 16px;">
-    <button id="levelup">Level Up</button>
-    <button id="xpgain">Get 1 XP</button>
-  </div>
 
   <div class="trainer-layout">
     <aside class="trainer-sidebar">
@@ -86,15 +16,37 @@
 
       <form id="avatar-form" enctype="multipart/form-data">
         <input id="avatar-file" type="file" name="avatar" accept="image/*">
-        <button type="submit" style="margin-top:8px;">Upload</button>
+        <button type="submit" class="btn">Upload</button>
       </form>
-      <div class="upload-hint">Max ~1 MB, square image looks best (e.g. 256×256).</div>
+      <div class="upload-hint">Max ~1 MB</div>
     </aside>
 
-    <div id="pet-container" style="display: flex; justify-content: center; margin-top: 20px;"></div>
+    <div id="pet-container" class="pet-container"></div>
+
+    <aside class="xp-panel">
+      <div class="xp-actions">
+        <div id="claimxp-wrap" class="claim-wrap">
+          <button id="claimxp" class="btn">Claim Passive XP</button>
+          <div class="progress passive" id="claimxp-bar">
+            <div class="progress-fill" id="claimxp-fill"></div>
+            <div class="progress-label" id="claimxp-label">0/2500</div>
+          </div>
+        </div>
+
+        <div style="height:14px;"></div>
+
+        <button id="xpgain" class="candy-btn" aria-label="+1 XP">
+          <img src="/uploads/rarecandy.png" alt="+1 XP">
+          <span>+1 XP</span>
+        </button>
+
+        <!-- <button id="levelup" type="button" class="btn">Level Up (Test)</button> -->
+      </div>
+    </aside>
   </div>
 
 
+  <script src="/protected/petdisplay.js"></script>
   <script src="navbar/navbar.js"></script>
   <script src="/protected/trainer.js"></script>
 </body>

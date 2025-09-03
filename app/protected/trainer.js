@@ -13,119 +13,225 @@ function inferMoveRarity(dmg) {
   return null;
 }
 
-function displayPet(data) {
-  const container = document.getElementById("pet-container");
-  container.innerHTML = '';
+const MUTATION_META = {
+  Frozen:     { emoji: "❄️", aura: "aura-pulse",   color: "#76c7ff" },
+  Fiery:      { emoji: "🔥", aura: "aura-flicker", color: "#ff6b3d" },
+  Golden:     { emoji: "🪙", aura: "aura-sparkle", color: "#ffd54f" },
+  Shadow:     { emoji: "🌑", aura: "aura-wave",    color: "#5e5b8a" },
+  Crystal:    { emoji: "💎", aura: "aura-sparkle", color: "#7fe3ff" },
+  Toxic:      { emoji: "☣️", aura: "aura-pulse",   color: "#99e26b" },
+  Glowing:    { emoji: "💡", aura: "aura-pulse",   color: "#f5ff7a" },
+  Radiant:    { emoji: "✨", aura: "aura-sparkle", color: "#ffd54f" },
+  Cursed:     { emoji: "🕯️", aura: "aura-wave",    color: "#a675ff" },
+  Shocked:    { emoji: "⚡", aura: "aura-flicker", color: "#ffe45e" },
+  Ancient:    { emoji: "🏺", aura: "aura-pulse",   color: "#c9a36b" },
+  Metallic:   { emoji: "⚙️", aura: "aura-spin",    color: "#b0bec5" },
+  Obsidian:   { emoji: "🪨", aura: "aura-wave",    color: "#4a3f5c" },
+  Lunar:      { emoji: "🌙", aura: "aura-pulse",   color: "#c3d8ff" },
+  Solar:      { emoji: "☀️", aura: "aura-sparkle", color: "#ffcc66" },
+  Stormy:     { emoji: "🌩️", aura: "aura-flicker",color: "#9ec3ff" },
+  Void:       { emoji: "🕳️", aura: "aura-wave",    color: "#6b00b3" },
+  Arcane:     { emoji: "🔮", aura: "aura-sparkle", color: "#c07bff" },
+  Spiky:      { emoji: "🌵", aura: "aura-pulse",   color: "#88d06a" },
+  Corrupted:  { emoji: "🧪", aura: "aura-flicker", color: "#b96eff" },
+  Astral:     { emoji: "🌌", aura: "aura-sparkle", color: "#70b2ff" },
+  Blighted:   { emoji: "🍂", aura: "aura-wave",    color: "#a8d65e" },
+  Runic:      { emoji: "ᚠ", aura: "aura-spin",    color: "#7dd3fc" },
+  Chaotic:    { emoji: "🌀", aura: "aura-flicker", color: "#ff8fb1" },
+  Enchanted:  { emoji: "🪄", aura: "aura-sparkle", color: "#b388ff" },
+  Ghostly:    { emoji: "👻", aura: "aura-pulse",   color: "#b3e5fc" },
+  Cutesy:     { emoji: "💖", aura: "aura-sparkle", color: "#ffa3d1" },
+  Slimey:     { emoji: "🟢", aura: "aura-wave",    color: "#87e36e" },
+  Grassy:     { emoji: "🌿", aura: "aura-pulse",   color: "#7dd37b" },
+  Sigma:      { emoji: "Σ",  aura: "aura-spin",    color: "#8bc7ff" },
+  Skibidi:    { emoji: "🧻", aura: "aura-flicker", color: "#ffc299" },
+  Holy:       { emoji: "🕊️", aura: "aura-sparkle", color: "#fff2a8" },
+  Shiny:      { emoji: "🌟", aura: "aura-sparkle", color: "#ffe06b" },
+};
 
-  const petBox = document.createElement("div");
-  petBox.style.border = "2px solid black";
-  petBox.style.padding = "20px";
-  petBox.style.width = "420px";
-  petBox.style.backgroundColor = "#f9f9f9";
-  petBox.style.borderRadius = "10px";
-  petBox.style.textAlign = "left";
+const TYPE_EMOJI = {
+    normal:   "⚪️",
+    fire:     "🔥",
+    water:    "💧",
+    grass:    "🌿",
+    electric: "⚡",
+    ice:      "❄️",
+    fighting: "🥊",
+    poison:   "☠️",
+    ground:   "⛰️",
+    flying:   "🕊️",
+    psychic:  "🔮",
+    bug:      "🐛",
+    rock:     "🪨",
+    ghost:    "👻",
+    dragon:   "🐉",
+    steel:    "⚙️",
+    dark:     "🌑",
+    fairy:    "✨"
+  };
 
-  const title = document.createElement("h2");
-  title.textContent = data.name;
-  title.style.textAlign = "center";
+function renderMutationsChips(muts = []) {
+  const wrap = document.createElement("div");
+  wrap.className = "mutations-wrap";
+  muts.forEach(name => {
+    const meta = MUTATION_META[name] || { emoji: "🧬", color: "#ccc" };
+    const chip = document.createElement("span");
+    chip.className = "mutation-chip";
+    chip.style.borderColor = meta.color;
+    chip.textContent = `${meta.emoji} ${name}`;
+    wrap.appendChild(chip);
+  });
+  return wrap;
+}
+
+function mountPetSpriteWithAura(imgEl, mutations = []) {
+  const seenColors = new Set();
+  const colors = [];
+  const effects = [];
+  (mutations || []).forEach(name => {
+    const meta = MUTATION_META[name];
+    if (!meta) return;
+    if (!seenColors.has(meta.color)) {
+      seenColors.add(meta.color);
+      colors.push(meta.color);
+    }
+    if (effects.length < 2 && meta.aura && !effects.includes(meta.aura)) {
+      effects.push(meta.aura);
+    }
+  });
+
+  const wrap = document.createElement("div");
+  wrap.className = ["aura-base", ...effects].join(" ").trim();
+
+  const c1 = colors[0] || "transparent";
+  const c2 = colors[1] || colors[0] || "transparent";
+  const c3 = colors[2] || colors[1] || colors[0] || "transparent";
+  wrap.style.setProperty("--aura-color-1", c1);
+  wrap.style.setProperty("--aura-color-2", c2);
+  wrap.style.setProperty("--aura-color-3", c3);
+
+  imgEl.classList.add("pet-sprite");
+  wrap.appendChild(imgEl);
+  return wrap;
+}
+
+function buildSpriteWithAuras(spriteUrl, mutations = []) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "aura-base";
+
+  const effects = new Set();
+  const colors = [];
+  mutations.forEach(m => {
+    const meta = MUTATION_META[m];
+    if (!meta) return;
+    effects.add(meta.aura);
+    colors.push(meta.color);
+  });
+
+  effects.forEach(cls => wrapper.classList.add(cls));
+
+  if (colors[0]) wrapper.style.setProperty("--aura-color-1", colors[0]);
+  if (colors[1]) wrapper.style.setProperty("--aura-color-2", colors[1]);
+  if (colors[2]) wrapper.style.setProperty("--aura-color-3", colors[2]);
 
   const img = document.createElement("img");
-  img.src = data.sprite;
+  img.className = "pet-sprite";
+  img.src = spriteUrl;
   img.alt = "Pet sprite";
-  img.style.display = "block";
-  img.style.margin = "auto";
+  wrapper.appendChild(img);
+  return wrapper;
+}
 
-  petBox.appendChild(title);
-  petBox.appendChild(img);
+function ensureRankUpButton(data) {
+  const host = document.querySelector(".trainer-actions-inner");
+  if (!host) return;
 
-  const lines = [
-    ["Rarity", data.rarity],
-    ["Type", data.type],
-    ["Speed", data.speed],
-    ["Mutations", joinOrNone(data.mutations)],
-    ["Level", data.level],
-    ["XP", `${data.xp ?? 0} / ${data.xp_cap ?? 10}`],
-    ["Health", String(data.health) + " (+" + data.health_growth + "/level)"],
-    ["Attack", String(data.attack) + " (+" + data.attack_growth + "/level)"],
-    ["Defense", String(data.defense) + " (+" + data.defense_growth + "/level)"]
-  ];
+  let btn = document.getElementById("rankup");
+  const shouldShow = !!(data.rank_up_pending && data.rank_up_target);
 
-  for (var i = 0; i < lines.length; i++) {
-    var p = document.createElement("p");
-    p.innerHTML = "<strong>" + lines[i][0] + ":</strong> " + lines[i][1];
-    petBox.appendChild(p);
+  if (!shouldShow) {
+    if (btn) btn.style.display = "none";
+    return;
   }
 
-  const moveHeader = document.createElement("div");
-  moveHeader.style.display = "flex";
-  moveHeader.style.justifyContent = "space-between";
-  moveHeader.style.alignItems = "center";
-  const mhLeft = document.createElement("p");
-  mhLeft.innerHTML = "<strong>Moves:</strong>";
-  const mhRight = document.createElement("p");
-  const rerollsAvail = Number(data.available_rerolls || 0);
-  mhRight.textContent = "Rerolls available: " + rerollsAvail;
-  moveHeader.appendChild(mhLeft);
-  moveHeader.appendChild(mhRight);
-  petBox.appendChild(moveHeader);
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.id = "rankup";
+    btn.className = "btn";
+    btn.style.marginBottom = "14px";
+    btn.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/rank-up", { method: "POST", credentials: "include" });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(json.error || "Rank up failed");
+          return;
+        }
+        displayPet(json);
+      } catch (e) {
+        console.error("Rank up failed:", e);
+        alert("Rank up failed");
+      }
+    });
+    host.prepend(btn);
+  }
 
-  const moveList = document.createElement("ul");
-  moveList.style.paddingLeft = "18px";
+  btn.textContent = `RANK UP (${data.rank_up_target})`;
+  btn.style.display = "block";
+}
 
-  for (let s = 1; s <= 4; s++) {
-    const name = data["move" + s + "name"];
-    if (!name) continue;
-    const type = data["move" + s + "type"];
-    const dmg  = data["move" + s + "damage"];
-    if (typeof dmg !== "number" || dmg <= 0) continue;
+function displayPet(data) {
+  const container = document.getElementById("pet-container");
 
-    let rar = data["move" + s + "rarity"] || inferMoveRarity(dmg);
-    if (!rar) rar = inferMoveRarity(dmg);
-
-    const li = document.createElement("li");
-    li.classList.add("move-chip");
-    if (rar === "weak") li.classList.add("rarity-weak");
-    else if (rar === "average") li.classList.add("rarity-average");
-    else if (rar === "based") li.classList.add("rarity-based");
-    else if (rar === "awesome") li.classList.add("rarity-awesome");
-    else if (rar === "legendary") li.classList.add("rarity-legendary");
-
-    const label = document.createElement("span");
-    label.textContent = name + " (" + type + ") - " + dmg + " dmg";
-    li.appendChild(label);
-
-    if (rerollsAvail > 0) {
-      const btn = document.createElement("button");
-      btn.textContent = "Reroll";
-      btn.style.marginLeft = "8px";
-      btn.addEventListener("click", () => {
+  PetDisplay.render(
+    container,
+    data,
+    {
+      showTitle: true,
+      showMutations: true,
+      showBars: { health: true, xp: true },
+      showGridStats: true,
+      showMoves: true,
+      showReroll: true,
+      availableRerolls: Number(data.available_rerolls || 0),
+      showRerollCount: true,
+      showRankUp: true
+    },
+    {
+      onReroll: (slot) => {
         fetch("/reroll-move", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ slot: s })
+          body: JSON.stringify({ slot })
         })
-          .then(res => {
-            if (!res.ok) return res.json().then(e => { throw new Error(e.error || "Reroll failed"); });
-            return res.json();
-          })
-          .then(updated => {
-            displayPet(updated);
-          })
-          .catch(err => {
-            alert(err.message || "Reroll failed");
-            console.error(err);
-          });
-      });
-      li.appendChild(btn);
+          .then(res => res.ok ? res.json() : res.json().then(e => Promise.reject(e)))
+          .then(updated => displayPet(updated))
+          .catch(err => alert(err.error || "Reroll failed"));
+      },
+      onRankUp: () => {
+        fetch("/rank-up", { method: "POST", credentials: "include" })
+          .then(res => res.ok ? res.json() : res.json().then(e => Promise.reject(e)))
+          .then(updated => displayPet(updated))
+          .catch(err => alert(err.error || "Rank up failed"));
+      }
     }
+  );
 
-    moveList.appendChild(li);
-  }
+  const pexp = Number(data.passive_exp ?? 0);
+  const cap = 2500;
+  const percent = Math.max(0, Math.min(100, Math.round((pexp / cap) * 100)));
 
-  petBox.appendChild(moveList);
-  container.appendChild(petBox);
+  const claimBtn = document.getElementById("claimxp");
+  if (claimBtn) claimBtn.textContent = "Claim Passive XP";
+
+  const fill = document.getElementById("claimxp-fill");
+  if (fill) fill.style.width = percent + "%";
+
+  const label = document.getElementById("claimxp-label");
+  if (label) label.textContent = `${pexp}/${cap}`;
 }
+
 
 
 function loadPet() {
@@ -182,6 +288,29 @@ document.getElementById("xpgain")?.addEventListener("click", function() {
     });
 });
 
+document.getElementById("claimxp")?.addEventListener("click", async () => {
+  try {
+    const res = await fetch("/train", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" }
+    });
+    if (res.status === 404) {
+      alert("No saved pet. Generate and Save first.");
+      return;
+    }
+    const json = await res.json();
+    if (!res.ok) {
+      alert(json.error || "Claim failed");
+      return;
+    }
+    displayPet(json);
+  } catch (e) {
+    console.error("Claim failed:", e);
+    alert("Claim failed");
+  }
+});
+
 function initializeAvatar() {
   fetch("/me", { credentials: "include" })
     .then(r => r.ok ? r.json() : null)
@@ -224,3 +353,11 @@ function initializeAvatar() {
 
 initializeAvatar();
 loadPet();
+
+setInterval(() => {
+  fetch("/my-pet", { credentials: "include" })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => { if (data) displayPet(data); })
+    .catch(() => {});
+}, 15000);
+
