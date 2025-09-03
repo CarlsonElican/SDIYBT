@@ -311,27 +311,6 @@ document.getElementById("claimxp")?.addEventListener("click", async () => {
   }
 });
 
-
-
-// REMOVE THIS WHEN FINALIZING
-document.getElementById("levelup")?.addEventListener("click", function() {
-  fetch("/levelup", { method: "POST", credentials: "include" })
-    .then(function (res) {
-      if (res.status === 404) {
-        alert("No saved pet. Generate and Save first.");
-        return null;
-      }
-      if (!res.ok) throw new Error("Failed to level up");
-      return res.json();
-    })
-    .then(function (row) {
-      if (row) displayPet(row);
-    })
-    .catch(function (err) {
-      console.error("Level up failed:", err);
-    });
-});
-
 function initializeAvatar() {
   fetch("/me", { credentials: "include" })
     .then(r => r.ok ? r.json() : null)
