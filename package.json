@@ -12,8 +12,8 @@
     "uuid": "^11.1.0"
   },
   "scripts": {
-    "start": "cd app & node server.js"
-  },
+  "start": "node app/server.js"
+},
   "devDependencies": {
     "@flydotio/dockerfile": "^0.7.10"
   }
