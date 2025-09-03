@@ -1,8 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+/* welcome page */
+
+body.home-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 32px 16px;
+}
+
+.home {
+  width: min(760px, 92vw);
+  text-align: center;
+  backdrop-filter: blur(6px);
+  background: color-mix(in oklab, #ffffff 70%, transparent);
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 18px;
+  padding: 36px 28px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.10);
+}
+
+.home-title {
+  margin: 0 0 8px;
+  font-size: clamp(40px, 6vw, 68px);
+  font-family: 'Press Start 2P', cursive;
+  font-weight: 400;
+  letter-spacing: 0.6px;
+  line-height: 1.05;
+  color: #111;
+
+  background: linear-gradient(
+    90deg,
+    #ff006e,  
+    #ffbe0b,  
+    #3a86ff,  
+    #8338ec,  
+    #ff006e  
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  background-size: 300% 100%;
+  animation: titleSheen 8s linear infinite;
+  text-shadow: 4px 4px 0 rgb(0, 0, 0)
+}
+
+@keyframes titleSheen {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.home-subtitle {
+  margin: 0 0 24px;
+  font-size: clamp(16px, 2.6vw, 20px);
+  color: #333;
+  opacity: 0.9;
+  font-family: 'Merriweather', serif; 
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.home-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-family: 'Merriweather', serif; 
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+#howToPlayModal .modal-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;   
+  text-align: center;    
+  gap: 16px;
+}
+
+
+#howToPlayModal .modal-box p {
+  margin: 0 0 12px;
+  max-width: 640px;      
+}
+
+#closeHowToPlay {
+  margin-top: 12px;
+  align-self: center;    
+}
+
 body {
   background: linear-gradient(135deg, #d0eaff 0%, #ffd6e0 30%, #ffeacc 60%, #e6d6ff 100%);
   background-size: 300% 300%;
   animation: pastelShift 25s ease infinite;
-  font-family: 'Segoe UI', Arial, sans-serif;
+  font-family: 'Merriweather', serif;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -11,7 +106,6 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-top: calc(var(--navbar-h, 56px) + 8px);
 }
 
 @keyframes pastelShift {
@@ -234,7 +328,14 @@ nav li { margin: 0; }
 
 
 .pet-container { display: flex; justify-content: center; margin-top: 20px;  padding-bottom: 72px; box-sizing: border-box; }
-.actions { display: flex; justify-content: center; gap: 12px; margin-top: 20px; }
+.actions { display: flex; justify-content: center; gap: 12px; margin-top: 60px; }
+
+.generate-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: -100px;  
+}
+
 
 .pet-card {
   box-sizing: border-box;
@@ -697,65 +798,47 @@ body.leaderboard-page {
 
 /* pet rarity text */
 
-.rarity-text { font-weight: 900; }
+.rarity-text {
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
 
 .rarity-text.r-common {
-  color: #9be7a3; 
-  text-shadow:
-    -1px -1px 0 #2e7d32, 0 -1px 0 #2e7d32, 1px -1px 0 #2e7d32,
-    -1px  0   0 #2e7d32, 1px  0   0 #2e7d32,
-    -1px  1px 0 #2e7d32, 0  1px  0 #2e7d32, 1px  1px 0 #2e7d32;
+  color: #2e7d32;
+  text-shadow: 0 0 3px #9be7a3;
 }
 
 .rarity-text.r-uncommon {
-  color: #43a047; 
-  text-shadow:
-    -1px -1px 0 #1b5e20, 0 -1px 0 #1b5e20, 1px -1px 0 #1b5e20,
-    -1px  0   0 #1b5e20, 1px  0   0 #1b5e20,
-    -1px  1px 0 #1b5e20, 0  1px  0 #1b5e20, 1px  1px 0 #1b5e20;
+  color: #1b5e20;
+  text-shadow: 0 0 3px #43a047;
 }
 
 .rarity-text.r-rare {
-  color: #64b5f6; 
-  text-shadow:
-    -1px -1px 0 #1e88e5, 0 -1px 0 #1e88e5, 1px -1px 0 #1e88e5,
-    -1px  0   0 #1e88e5, 1px  0   0 #1e88e5,
-    -1px  1px 0 #1e88e5, 0  1px  0 #1e88e5, 1px  1px 0 #1e88e5;
+  color: #1565c0;
+  text-shadow: 0 0 4px #64b5f6;
 }
 
 .rarity-text.r-epic {
-  color: #ba68c8; 
-  text-shadow:
-    -1px -1px 0 #6a1b9a, 0 -1px 0 #6a1b9a, 1px -1px 0 #6a1b9a,
-    -1px  0   0 #6a1b9a, 1px  0   0 #6a1b9a,
-    -1px  1px 0 #6a1b9a, 0  1px  0 #6a1b9a, 1px  1px 0 #6a1b9a;
+  color: #6a1b9a;
+  text-shadow: 0 0 4px #ba68c8;
 }
 
 .rarity-text.r-mythical {
-  color: #ff4081; 
-  text-shadow:
-    -1px -1px 0 #e53935, 0 -1px 0 #e53935, 1px -1px 0 #e53935,
-    -1px  0   0 #e53935, 1px  0   0 #e53935,
-    -1px  1px 0 #e53935, 0  1px  0 #e53935, 1px  1px 0 #e53935;
+  color: #ad1457;
+  text-shadow: 0 0 4px #ff4081;
 }
 
 .rarity-text.r-divine {
-  color: #e53935; 
-  text-shadow:
-    -1px -1px 0 #000, 0 -1px 0 #000, 1px -1px 0 #000,
-    -1px  0   0 #000, 1px  0   0 #000,
-    -1px  1px 0 #000, 0  1px  0 #000, 1px  1px 0 #000;
+  color: #b71c1c;
+  text-shadow: 0 0 4px #ff6b6b;
 }
 
 .rarity-text.r-legend {
-  color: #ffd700; 
-  text-shadow:
-    -1px -1px 0 #ff8f00, 0 -1px 0 #ff8f00, 1px -1px 0 #ff8f00,
-    -1px  0   0 #ff8f00, 1px  0   0 #ff8f00,
-    -1px  1px 0 #ff8f00, 0  1px  0 #ff8f00, 1px  1px 0 #ff8f00;
+  color: #ffb300;
+  text-shadow: 0 0 6px #ffd700, 0 0 10px #ff8f00;
 }
 
-/* --- Auth pages (login & signup) --- */
+/* login and sign up */
 
 body.auth-page {
   display: block;

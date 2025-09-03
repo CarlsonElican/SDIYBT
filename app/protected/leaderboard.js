@@ -25,6 +25,28 @@ const i = RARITY_ORDER.findIndex(x => x.toLowerCase() === String(r).toLowerCase(
 return i === -1 ? 999 : i;
 };
 
+function rarityClassName(r) {
+  const key = String(r || "").toLowerCase().replace(/[^a-z]/g, "");
+  const map = {
+    common: "r-common",
+    uncommon: "r-uncommon",
+    rare: "r-rare",
+    epic: "r-epic",
+    mythical: "r-mythical",
+    divine: "r-divine",
+    theoneandonly: "r-legend", 
+    legend: "r-legend",
+    legendary: "r-legend",
+  };
+  return map[key] || "";
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[m]));
+}
+
 const MUTATION_META = {
   Frozen:     { emoji: "❄️", aura: "aura-pulse",   color: "#76c7ff" },
   Fiery:      { emoji: "🔥", aura: "aura-flicker", color: "#ff6b3d" },
@@ -315,8 +337,9 @@ sorted.forEach(row => {
   tr.appendChild(tdLvl);
 
   const tdRarity = document.createElement("td");
-  tdRarity.textContent = String(rarity);
+  tdRarity.innerHTML = `<span class="rarity-text ${rarityClassName(rarity)}">${escapeHtml(rarity)}</span>`;
   tr.appendChild(tdRarity);
+
 
   tbody.appendChild(tr);
 });
