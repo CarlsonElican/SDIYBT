@@ -31,7 +31,8 @@ const r2 = new S3Client({
 });
 
 const pool = new pg.Pool({
-  connectionString: "postgresql://neondb_owner:npg_mpqW7HL6crvz@ep-cold-base-aep1ue78-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: true }
 });
 
 const GENERATE_COOLDOWN_MS = 2 * 60 * 1000; // 2 
