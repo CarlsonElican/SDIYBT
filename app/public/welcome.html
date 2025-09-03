@@ -5,16 +5,56 @@
 	<title>Pet Game (Name TBD)</title>
 	<link rel="stylesheet" type="text/css" href="style.css">
 </head>
-<body>
+<body class="home-page">
+  <main class="home">
+    <h1 class="home-title">Freaktures</h1>
+    <p class="home-subtitle">Unleash The Freak.</p>
 
-<p>Welcome to SDIYBT's Pet Game</p>
+    <div class="home-actions">
+  <button id="howToPlayBtn" class="btn btn-lg">How to Play</button>
+  <a class="btn btn-lg" href="signup.html">Sign Up</a>
+  <a class="btn btn-lg" href="login.html">Log In</a>
+  </div>
 
-<nav>
-  <ul>
-    <li><a href="signup.html">Sign Up</a></li>
-    <li><a href="login.html">Log In</a></li>
-  </ul>
-</nav>
+  
+  </main>
+  <div id="howToPlayModal" class="modal-overlay">
+  <div class="modal-box">
+    <h2 class="modal-title">How to Play</h2>
 
+    <p>
+      Welcome to Freaktures, where you can get your very own freaky-creatures to train and grow. 
+      You can randomize a Freakture every two minutes. Remember you can only have one at a time, 
+      so saving another Freakture gets rid of your old one!
+    </p>
+    <p>
+      Freaktures can come in many different shapes and sizes, with different sprites, mutations, 
+      types, stats, moves and rarities. There are 7 different rarities you can get: Common, Uncommon, 
+      Rare, Epic, Mythical, Divine, and The One and Only. They have a chance to improve their rarity 
+      as they level up though, so don't give up on one that starts out low! 
+    </p>
+    <p>
+      A Freakture can have up to four moves, unlocking each every 20 levels. The higher the rarity, the better chances for stronger moves. 
+      Once they have a full moveset, every five levels gives you a reroll, which allows you to change one of your moves.
+    </p>
+    <p>
+      To level up your Freakture, just press the +1 XP button on the trainer tab. Additionally, you 
+      can also stack up passive XP every day—just remember to collect it before it's full to avoid 
+      wasting them!
+    </p>
+    <p>
+      Remember to upload your own picture and check out the leaderboard to compare your Freakture 
+      with other users! Later in a future update, get ready to face them head to head in battle mode!
+    </p>
+    <p>
+      Thank you for playing! <br>
+      <strong>Carlson and Justin</strong>
+    </p>
+
+    <button id="closeHowToPlay" class="btn btn-ghost btn-lg">Close</button>
+  </div>
+</div>
+
+  <script src="welcome.js"></script>
 </body>
 </html>
