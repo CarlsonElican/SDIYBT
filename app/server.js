@@ -14,6 +14,8 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 const multer = require("multer");
 const sharp = require("sharp");
 
+const PORT = process.env.PORT || 3000;
+const HOST = "0.0.0.0";
 
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const R2_BUCKET = process.env.R2_BUCKET || "sdiybt-pet-game-uploads";
@@ -1145,6 +1147,6 @@ app.post("/reroll-move", async (req, res) => {
 });
 
 
-app.listen(port, hostname, () => {
-  console.log(`Listening at: http://${hostname}:${port}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Server listening on http://${HOST}:${PORT}`);
 });
