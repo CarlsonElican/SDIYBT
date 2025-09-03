@@ -40,8 +40,6 @@ const pool = new pg.Pool({
 const GENERATE_COOLDOWN_MS = 2 * 60 * 1000; // 2 
 const MAX_LEVEL = 1000;
 
-
-
 app.use(session({
   secret: "sdiybt-secret-code-word",
   resave: false,
@@ -49,7 +47,7 @@ app.use(session({
   cookie: { secure: false } // change this when moving to online server/https
 }));
 
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 app.use("/protected", express.static(__dirname + "/protected"));
 
