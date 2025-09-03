@@ -256,7 +256,7 @@
         label.textContent = `${nameCap} (${emoji} ${typeCap}) - ${dmg} dmg`;
         li.appendChild(label);
 
-        if (showReroll && availableRerolls > 0 && typeof onReroll === "function") {
+        if (showReroll && availableRerolls > 0 /*&& rar !== "legendary"*/ && typeof onReroll === "function") {
           const btn = document.createElement("button");
           btn.textContent = "Reroll";
           btn.className = "inline-btn";

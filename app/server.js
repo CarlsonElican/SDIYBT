@@ -1062,20 +1062,18 @@ function getAvailableRerolls(level, spent) {
 }
 
 const REROLL_ODDS = {
-  "Common":           { same: 60, up1: 40, up2: 0 },
-  "Uncommon":         { same: 45, up1: 50, up2: 5 },
-  "Rare":             { same: 40, up1: 50, up2: 10 },
-  "Epic":             { same: 30, up1: 55, up2: 15 },
-  "Mythical":         { same: 20, up1: 60, up2: 20 },
-  "Divine":           { same: 10, up1: 60, up2: 30 },
-  "The One and Only": { same: 100, up1: 0,  up2: 0 }
+  "Common":           { same: 85, up1: 15 },
+  "Uncommon":         { same: 75, up1: 25 },
+  "Rare":             { same: 70, up1: 30 },
+  "Epic":             { same: 65, up1: 35 },
+  "Mythical":         { same: 60, up1: 40 },
+  "Divine":           { same: 55, up1: 45 },
+  "The One and Only": { same: 100, up1: 0 }
 };
 
 function rollRerollStep(odds) {
   const r = Math.random() * 100;
-  if (r < odds.same) return 0;
-  if (r < odds.same + odds.up1) return 1;
-  return 2;
+  return r < odds.same ? 0 : 1;
 }
 
 app.post("/reroll-move", async (req, res) => {
@@ -1116,7 +1114,7 @@ app.post("/reroll-move", async (req, res) => {
     let pick = null;
     const order = ["legendary","awesome","based","average","weak"];
     const targetIdx = order.indexOf(targetBucket);
-    const searchOrder = [targetIdx, targetIdx-1, targetIdx+1, targetIdx-2, targetIdx+2]
+    const searchOrder = [targetIdx, targetIdx-1, targetIdx+1]
       .filter(i => i >= 0 && i < order.length)
       .map(i => order[i]);
 
